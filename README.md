@@ -12,7 +12,7 @@ standalone Node.js + Express + Postgres app, ready for Railway.
 
 - Life-story publishing: profiles, stories, read counts, likes, comments,
   followers, search / categories / trending
-- MySpace-style profiles: mutual friends, ranked Top 5 Friends, profile
+- Profiles: mutual friends, ranked Top 5 Friends, profile
   song (title/artist/link, YouTube link), 8 built-in skins
   (Classic Blue default, Classic Cream, Sunset Glow, Ocean Drive,
   Grape Soda, Forest Trail, Midnight Stars, Bubblegum Pop, Golden Hour),

@@ -9,7 +9,7 @@
  *
  * Features copied:
  * - Stories: publish, read-count, like, comment, search/category/trending
- * - MySpace-style profiles: friends (mutual), Top 5, profile song, 8 skins
+ * - Profiles: friends (mutual), Top 5, profile song, 8 skins
  *   + custom skins (upload-by-URL / import from a direct image link)
  * - AI companion per profile: text chat + voice (browser speech in the UI),
  *   customisable greeting/personality/topics/tone, minor-safe, identifies as AI
