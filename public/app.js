@@ -94,9 +94,11 @@ $('publishBtn').onclick = async () => {
   catch (e) { $('publishMsg').textContent = e.message; }
 };
 $('createProfileBtn').onclick = async () => {
-  try { const a = await api('/api/authors', { method: 'POST', body: JSON.stringify({ name: $('profileName').value, bio: $('profileBio').value }) }); me = a; $('profileMsg').textContent = `Profile created — ID ${a.id}. Use this ID to publish stories.`; loadAuthors(); }
+  try { const a = await api('/api/authors', { method: 'POST', body: JSON.stringify({ name: $('profileName').value, bio: $('profileBio').value }) }); me = a; try { localStorage.setItem('myProfileId', String(a.id)); } catch {} $('profileMsg').textContent = `Profile created — ID ${a.id}. Use this ID to publish stories.`; loadAuthors(); }
   catch (e) { $('profileMsg').textContent = e.message; }
 };
+function myProfileId() { try { return localStorage.getItem('myProfileId') || (me ? String(me.id) : null); } catch { return me ? String(me.id) : null; } }
+function claimProfile(id) { try { localStorage.setItem('myProfileId', String(id)); } catch {} me = { id }; openProfile(id); }
 
 async function loadAuthors() {
   skins = await api('/api/skins');
@@ -111,12 +113,19 @@ async function viewEp(id) { await api(`/api/episodes/${id}/view`, { method: 'POS
 async function openProfile(id) {
   const a = await api('/api/authors/' + id);
   const skin = skins[a.skin] || {};
+  // Skin / custom-skin controls are private: only the profile owner sees
+  // them, on their own profile. Everyone else sees the profile, friends,
+  // song and AI companion — but no editing controls.
+  const isMine = String(a.id) === String(myProfileId());
+  const editHtml = isMine ? `
+    <p>Skins: ${Object.entries(skins).map(([k, v]) => `<span class="skin" onclick="setSkin(${a.id},'${k}')">${esc(v.name)}</span>`).join('')}</p>
+    <p>Custom skin — paste a direct image link, or a whole profile layout code: <input id="csUrl" placeholder="Paste image link or layout code…"> <button onclick="addCustomSkin(${a.id})">Import skin</button></p>`
+    : `<p><button onclick="claimProfile(${a.id})">This is my profile</button></p>`;
   $('profileDetail').innerHTML = `<div class="card" style="${a.custom_skin_url ? `background-image:url('${esc(a.custom_skin_url)}');background-size:cover;background-position:center;` : `background:${skin.bg || '#fff'}`}">
     <h3>${esc(a.name)}</h3><p>${esc(a.bio || '')}</p>
     <p>Friends: ${a.friendCount} · Top 5: ${(a.topFriends || []).map((t) => '#' + t.rank).join(', ') || '—'}</p>
     <p>🎵 ${esc(a.song_title || 'No song yet')} — ${esc(a.song_artist || '')} ${a.song_url ? `<a href="${esc(a.song_url)}" target="_blank" rel="noopener">Listen</a>` : ''}</p>
-    <p>Skins: ${Object.entries(skins).map(([k, v]) => `<span class="skin" onclick="setSkin(${a.id},'${k}')">${esc(v.name)}</span>`).join('')}</p>
-    <p>Custom skin — paste a direct image link, or a whole profile layout code: <input id="csUrl" placeholder="Paste image link or layout code…"> <button onclick="addCustomSkin(${a.id})">Import skin</button></p>
+    ${editHtml}
     <div class="chatbox"><b>🤖 ${esc(a.name)}'s AI Companion</b><p>${esc(a.bot_greeting || '')} — I am an AI, not ${esc(a.name)}.</p>
     <input id="chatMsg" placeholder="Ask about their life story…"><button onclick="chat(${a.id})">Send</button> <button onclick="voiceChat(${a.id})">🎤 Voice call</button><div id="chatOut"></div></div>
     <p>Stories: ${(a.stories || []).map((s) => esc(s.title)).join(', ') || '—'} · Total reads: ${a.totalReads}</p></div>`;
