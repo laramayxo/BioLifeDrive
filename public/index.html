@@ -10,6 +10,7 @@
   <div class="logo">💬❤️ BioLifeDrive</div>
   <nav>
     <button data-nav="discover" class="active">Discover</button>
+    <button data-nav="create-profile">Create Profile</button>
     <button data-nav="profiles">Profiles</button>
     <button data-nav="docuseries">Docuseries</button>
     <button data-nav="earnings">Earnings</button>
@@ -38,10 +39,15 @@
     <textarea id="newBody" placeholder="Tell your life story…"></textarea>
     <button id="publishBtn">Publish story</button>
     <p id="publishMsg"></p>
-    <h3>Create a profile</h3>
+  </section>
+
+  <section id="view-create-profile" class="view hidden">
+    <h2>Create a profile</h2>
+    <p>Make your own BioLifeDrive profile — add your name and bio, then pick friends, a Top 5, a profile song, and a background skin on your profile page.</p>
     <input id="profileName" placeholder="Profile name"><input id="profileBio" placeholder="Bio">
     <button id="createProfileBtn">Create profile</button>
     <p id="profileMsg"></p>
+    <p class="hint">Your profile is checked by AI before it shows up, and your name is shown only as you enter it here.</p>
   </section>
 
   <section id="view-profiles" class="view hidden">
