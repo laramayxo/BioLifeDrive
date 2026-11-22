@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BioLifeDrive — Share • Connect • Tell Your Story</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header>
+  <div class="logo">💬❤️ BioLifeDrive</div>
+  <nav>
+    <button data-nav="discover" class="active">Discover</button>
+    <button data-nav="profiles">Profiles</button>
+    <button data-nav="docuseries">Docuseries</button>
+    <button data-nav="earnings">Earnings</button>
+    <button data-nav="safety">🛡️ Safety</button>
+    <button data-nav="legal">Legal</button>
+  </nav>
+  <div class="mode">
+    <label><input type="checkbox" id="adultMode"> 18+ Adult mode</label>
+    <span id="modeNote">Minor-safe browsing on</span>
+  </div>
+</header>
+<div class="hero"><h1>Share • Connect • Tell Your Story</h1><p>Life bios, open to comments. Creators earn 50/50 at 10,000 reads.</p></div>
+<div class="ad">AD SLOT — placeholder until AdSense approves biolifedrive.com</div>
+
+<main>
+  <section id="view-discover" class="view">
+    <h2>Discover stories</h2>
+    <input id="search" placeholder="Search stories…">
+    <select id="category"><option value="">All categories</option><option>Life story</option><option>Family</option><option>Travel</option><option>Career</option></select>
+    <button id="trendingBtn">Trending</button>
+    <div id="stories"></div>
+    <h3>Publish a story</h3>
+    <p class="hint">AI checks every story before publication. Racial slurs, hate, explicit content and scams are blocked. Strong language / non-explicit sexual themes publish as 18+ only.</p>
+    <input id="newAuthor" placeholder="Your profile name (create a profile first)">
+    <input id="newTitle" placeholder="Story title">
+    <textarea id="newBody" placeholder="Tell your life story…"></textarea>
+    <button id="publishBtn">Publish story</button>
+    <p id="publishMsg"></p>
+    <h3>Create a profile</h3>
+    <input id="profileName" placeholder="Profile name"><input id="profileBio" placeholder="Bio">
+    <button id="createProfileBtn">Create profile</button>
+    <p id="profileMsg"></p>
+  </section>
+
+  <section id="view-profiles" class="view hidden">
+    <h2>Profiles — MySpace style</h2>
+    <p>Friends, Top 5, a profile song, and background skins. Pick a profile to open it.</p>
+    <div id="authors"></div>
+    <div id="profileDetail"></div>
+  </section>
+
+  <section id="view-docuseries" class="view hidden">
+    <h2>Docuseries</h2><p>YouTube episodes linked to stories. Watching an episode adds to the parent story's read count.</p>
+    <div id="episodes"></div>
+  </section>
+
+  <section id="view-earnings" class="view hidden">
+    <h2>Earnings &amp; Membership</h2>
+    <p>Creators become eligible to earn at <b>10,000 total reads</b>, split <b>50% creator / 50% platform</b>. Videos over 5 minutes need a <b>$25/month Creator Membership</b>.</p>
+    <input id="earnAuthor" placeholder="Profile ID for earnings check">
+    <button id="earnBtn">Check earnings</button><div id="earnOut"></div>
+    <button id="memberBtn">Record $25/mo Creator Membership (model only — no payment taken)</button>
+    <h3>Creator Tax Center</h3>
+    <p>1099-style summaries — not tax advice, not an IRS filing.</p>
+    <button id="taxBtn">Download tax summary CSV</button>
+  </section>
+
+  <section id="view-safety" class="view hidden">
+    <h2>🛡️ Safety</h2>
+    <p>AI moderation runs before publication. Report a comment or story, or block a user. Browsing defaults to minor-safe mode; adults-only content is hidden from minors.</p>
+    <input id="reportTarget" placeholder="Report: type + id, e.g. story 3">
+    <input id="reportReason" placeholder="Reason">
+    <button id="reportBtn">🚩 Report</button><p id="reportMsg"></p>
+    <div id="reports"></div>
+  </section>
+
+  <section id="view-legal" class="view hidden">
+    <h2>Legal — templates, for lawyer review</h2>
+    <p>Owner: BioLifeDrive (sole owner). No partnership — creators are independent creators, not partners.</p>
+    <button data-legal="terms">Terms</button><button data-legal="privacy">Privacy</button>
+    <button data-legal="copyright">Copyright</button><button data-legal="creator">Creator Agreement</button>
+    <pre id="legalOut"></pre>
+  </section>
+</main>
+<footer><p>BioLifeDrive — sole owner: BioLifeDrive. No partnership. Creators are independent creators.</p></footer>
+<script src="/app.js"></script>
+</body>
+</html>
