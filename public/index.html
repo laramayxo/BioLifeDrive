@@ -11,6 +11,7 @@
   <nav>
     <button data-nav="discover" class="active">Discover</button>
     <button data-nav="create-profile">Create Profile</button>
+    <button data-nav="record-video">🎥 Record Video</button>
     <button data-nav="profiles">Profiles</button>
     <button data-nav="docuseries">Docuseries</button>
     <button data-nav="earnings">Earnings</button>
@@ -48,6 +49,22 @@
     <button id="createProfileBtn">Create profile</button>
     <p id="profileMsg"></p>
     <p class="hint">Your profile is checked by AI before it shows up, and your name is shown only as you enter it here.</p>
+  </section>
+
+  <section id="view-record-video" class="view hidden">
+    <h2>🎥 Record Video</h2>
+    <p>Record yourself right here with your camera and microphone — no YouTube needed. <b>Rules:</b> AI checks your title and description before anything is published — racial content, erotic content, bad language and anything bad is filtered. Strong language / non-explicit sexual themes publish as <b>18+ adults-only</b> and are hidden from minors. Videos <b>over 5 minutes need a $25/month Creator Membership</b> — free accounts can record up to 5 minutes.</p>
+    <p class="hint">Honest note: AI checks the title and description — it cannot watch the video itself. If a video breaks the rules, report it from the Safety tab and it will be taken down.</p>
+    <input id="videoAuthor" placeholder="Your Profile ID (create a profile first)">
+    <input id="videoTitle" placeholder="Video title">
+    <textarea id="videoDesc" placeholder="Describe your video…"></textarea>
+    <div><button id="cameraBtn">📷 Start camera</button> <button id="recBtn" disabled>⏺ Start recording</button> <button id="stopBtn" disabled>⏹ Stop</button> <span id="recTimer">0:00</span></div>
+    <video id="camPreview" autoplay muted playsinline style="width:100%;max-width:560px;background:#000;display:none"></video>
+    <video id="videoPreview" controls playsinline style="width:100%;max-width:560px;display:none"></video>
+    <div><button id="publishVideoBtn" disabled>Publish video</button></div>
+    <p id="videoMsg"></p>
+    <h3>Recorded videos</h3>
+    <div id="videos"></div>
   </section>
 
   <section id="view-profiles" class="view hidden">

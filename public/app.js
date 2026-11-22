@@ -10,8 +10,58 @@ document.querySelectorAll('[data-nav]').forEach((b) => b.onclick = () => {
   document.querySelectorAll('[data-nav]').forEach((x) => x.classList.remove('active')); b.classList.add('active');
   document.querySelectorAll('.view').forEach((v) => v.classList.add('hidden'));
   $('view-' + b.dataset.nav).classList.remove('hidden');
+  if (b.dataset.nav === 'record-video') loadVideos();
 });
-$('adultMode').onchange = (e) => { adult = e.target.checked; $('modeNote').textContent = adult ? 'Adult mode on — 18+ content visible' : 'Minor-safe browsing on'; loadStories(); loadAuthors(); };
+
+// ---------- Record Video: in-browser camera + mic ----------
+// MediaRecorder records locally in the browser. Nothing is uploaded until
+// the creator taps Publish — then the title/description go through the same
+// AI moderation as stories, and the 5-minute / $25 membership rule applies.
+let camStream = null, recorder = null, recChunks = [], recBlob = null, recSeconds = 0, recTimerId = null;
+function fmtTime(s) { return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+$('cameraBtn').onclick = async () => {
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    const pv = $('camPreview'); pv.srcObject = camStream; pv.style.display = 'block';
+    $('recBtn').disabled = false; $('videoMsg').textContent = 'Camera on — tap Start recording when you are ready.';
+  } catch (e) { $('videoMsg').textContent = 'Camera/microphone access was blocked. Allow camera and microphone in your browser to record.'; }
+};
+$('recBtn').onclick = () => {
+  if (!camStream) return;
+  recChunks = []; recSeconds = 0; recBlob = null; $('videoPreview').style.display = 'none'; $('publishVideoBtn').disabled = true;
+  recorder = new MediaRecorder(camStream, { mimeType: MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : undefined });
+  recorder.ondataavailable = (e) => { if (e.data.size) recChunks.push(e.data); };
+  recorder.onstop = () => {
+    recBlob = new Blob(recChunks, { type: 'video/webm' });
+    const pv = $('videoPreview'); pv.src = URL.createObjectURL(recBlob); pv.style.display = 'block';
+    $('publishVideoBtn').disabled = false;
+    $('videoMsg').textContent = `Recorded ${fmtTime(recSeconds)} — watch it back, then tap Publish video.`;
+  };
+  recorder.start(250); $('recBtn').disabled = true; $('stopBtn').disabled = false;
+  recTimerId = setInterval(() => { recSeconds++; $('recTimer').textContent = fmtTime(recSeconds); if (recSeconds === 300) $('videoMsg').textContent = '5 minutes reached — videos over 5 minutes need a $25/month Creator Membership.'; }, 1000);
+};
+$('stopBtn').onclick = () => { if (recorder && recorder.state !== 'inactive') recorder.stop(); clearInterval(recTimerId); $('recBtn').disabled = false; $('stopBtn').disabled = true; };
+$('publishVideoBtn').onclick = async () => {
+  if (!recBlob) return;
+  const authorId = Number($('videoAuthor').value);
+  if (!authorId) { $('videoMsg').textContent = 'Enter your Profile ID first — create a profile on the Create Profile tab if you have not yet.'; return; }
+  $('videoMsg').textContent = 'Publishing — AI is checking your title and description…';
+  try {
+    const url = `/api/videos?author_id=${authorId}&title=${encodeURIComponent($('videoTitle').value)}&description=${encodeURIComponent($('videoDesc').value)}&duration_seconds=${recSeconds}`;
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'video/webm' }, body: recBlob });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.statusText);
+    $('videoMsg').textContent = j.audience === 'adult' ? 'Published as 18+ adults-only.' : 'Video published!';
+    if (camStream) camStream.getTracks().forEach((t) => t.stop());
+    loadVideos();
+  } catch (e) { $('videoMsg').textContent = e.message; }
+};
+async function loadVideos() {
+  const list = await api(`/api/videos?adult=${adult ? 1 : 0}`);
+  $('videos').innerHTML = list.map((v) => `<div class="card"><b>${esc(v.title)}</b> — ${fmtTime(v.duration_seconds || 0)} · 👁 ${v.views} ${v.audience === 'adult' ? '· 18+' : ''}<br><video controls preload="metadata" src="${esc(v.file_path)}" style="width:100%;max-width:560px"></video><br><button onclick="viewVideo(${v.id})">Mark viewed</button> <button onclick="report('video',${v.id})">🚩 Report</button></div>`).join('') || '<p>No recorded videos yet — be the first to record one.</p>';
+}
+async function viewVideo(id) { await api(`/api/videos/${id}/view`, { method: 'POST' }); loadVideos(); }
+$('adultMode').onchange = (e) => { adult = e.target.checked; $('modeNote').textContent = adult ? 'Adult mode on — 18+ content visible' : 'Minor-safe browsing on'; loadStories(); loadAuthors(); loadVideos(); };
 document.querySelectorAll('[data-legal]').forEach((b) => b.onclick = async () => { const d = await api('/api/legal/' + b.dataset.legal); $('legalOut').textContent = d.text; });
 
 async function loadStories() {
@@ -76,4 +126,4 @@ $('memberBtn').onclick = async () => { await api('/api/memberships', { method: '
 $('taxBtn').onclick = () => { window.open(`/api/tax/${$('earnAuthor').value || 1}/2026?format=csv`, '_blank'); };
 $('reportBtn').onclick = async () => { await api('/api/reports', { method: 'POST', body: JSON.stringify({ target_type: 'manual', target_id: 0, reason: $('reportReason').value, details: $('reportTarget').value }) }); $('reportMsg').textContent = 'Reported.'; const r = await api('/api/reports'); $('reports').innerHTML = r.map((x) => `<div class="card">${esc(x.reason)} — ${esc(x.status)}</div>`).join(''); };
 
-loadStories(); loadAuthors();
+loadStories(); loadAuthors(); loadVideos();

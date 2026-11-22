@@ -74,6 +74,19 @@ CREATE TABLE IF NOT EXISTS episodes (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS videos (
+  id SERIAL PRIMARY KEY,
+  author_id INT REFERENCES authors(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  file_path TEXT NOT NULL,
+  duration_seconds INT DEFAULT 0,
+  audience TEXT DEFAULT 'all', -- all | adult
+  status TEXT DEFAULT 'published', -- published | adult | blocked
+  views INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS memberships (
   id SERIAL PRIMARY KEY,
   author_id INT REFERENCES authors(id) ON DELETE CASCADE,

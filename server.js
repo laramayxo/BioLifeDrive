@@ -18,6 +18,13 @@
  *   comment reporting, blocking, Safety page
  * - Docuseries: YouTube episodes linked to stories; episode views add to
  *   the parent story's read count
+ * - Record Video: record yourself in the browser (camera + mic), publish
+ *   the recording. Same rules as stories: AI moderation on title/description
+ *   before publication (the AI cannot watch the video itself — report/block
+ *   is the backstop), minor-safe by default with 18+ adults-only, videos
+ *   over 5 minutes need a $25/month Creator Membership. Videos are stored
+ *   as files on the server (Railway disk is ephemeral — a redeploy can lose
+ *   them; permanent object storage is a later step before relying on them).
  * - Earnings: eligible at 10,000 total reads, 50/50 split, $25/mo Creator
  *   Membership for videos over 5 minutes, Earnings dashboard, Tax Center
  *   (1099-style summaries + CSV download — templates, not tax advice)
@@ -41,6 +48,9 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '6mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
+fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 const PORT = process.env.PORT || 3000;
 
@@ -74,7 +84,7 @@ try {
   }
 } catch (e) { console.warn('pg unavailable, using memory store', e.message); }
 
-const mem = { authors: [], stories: [], comments: [], friendships: [], topFive: [], follows: [], episodes: [], memberships: [], reports: [], blocks: [], botMessages: [], customSkins: [], seq: { authors: 1, stories: 1, comments: 1, episodes: 1, reports: 1, botMessages: 1, customSkins: 1 } };
+const mem = { authors: [], stories: [], comments: [], friendships: [], topFive: [], follows: [], episodes: [], videos: [], memberships: [], reports: [], blocks: [], botMessages: [], customSkins: [], seq: { authors: 1, stories: 1, comments: 1, episodes: 1, videos: 1, reports: 1, botMessages: 1, customSkins: 1 } };
 const SKINS = {
   'classic-blue': { name: 'Classic Blue', bg: '#eaf4ff', accent: '#0091ff' },
   'classic-cream': { name: 'Classic Cream', bg: '#fff8e7', accent: '#0091ff' },
@@ -238,6 +248,52 @@ app.post('/api/episodes/:id/view', async (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- Recorded videos ----------
+// Recorded in the browser, uploaded as a file, stored on server disk.
+// Rules, same as stories: AI moderation on title/description BEFORE
+// publication; blocked titles/descriptions are never published. Strong
+// profanity / non-explicit sexual themes publish as 18+ adults-only and are
+// hidden from minors. Videos over 5 minutes (300s) need a $25/month Creator
+// Membership. Honest limit: the AI checks the title/description — it cannot
+// watch the recorded video itself. Report/block is the backstop.
+app.get('/api/videos', async (req, res) => {
+  const adult = req.query.adult === '1';
+  let rows = useDb ? (await q('SELECT * FROM videos WHERE status != $1 ORDER BY id DESC', ['blocked'])).rows
+    : [...mem.videos].filter((v) => v.status !== 'blocked').reverse();
+  if (!adult) rows = rows.filter((v) => v.audience !== 'adult' && v.status !== 'adult');
+  res.json(rows);
+});
+app.post('/api/videos', express.raw({ type: 'video/*', limit: '100mb' }), async (req, res) => {
+  try {
+    const author_id = Number(req.query.author_id);
+    const title = String(req.query.title || '').slice(0, 200);
+    const description = String(req.query.description || '').slice(0, 2000);
+    const duration_seconds = Number(req.query.duration_seconds) || 0;
+    if (!author_id || !title) return res.status(400).json({ error: 'Create a profile first, then give your video a title.' });
+    if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: 'No video was recorded — record a video first.' });
+    if (req.body.length > 100 * 1024 * 1024) return res.status(413).json({ error: 'Video is too large (100 MB limit). Record a shorter video.' });
+    const status = moderate(`${title} ${description}`);
+    if (status === 'blocked') return res.status(400).json({ error: 'This video was blocked by AI moderation and was not published.' });
+    if (duration_seconds > 300) {
+      const hasMembership = useDb
+        ? (await q("SELECT * FROM memberships WHERE author_id=$1 AND plan='creator'", [author_id])).rows.length > 0
+        : mem.memberships.some((m) => m.author_id === author_id && m.plan === 'creator');
+      if (!hasMembership) return res.status(402).json({ error: 'Videos over 5 minutes need a $25/month Creator Membership. Free accounts can record videos up to 5 minutes.' });
+    }
+    const audience = status === 'adult' ? 'adult' : 'all';
+    const filename = `video-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.webm`;
+    fs.writeFileSync(path.join(UPLOADS_DIR, filename), req.body);
+    const file_path = `/uploads/${filename}`;
+    if (useDb) { const r = await q('INSERT INTO videos(author_id,title,description,file_path,duration_seconds,audience,status) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *', [author_id, title, description, file_path, duration_seconds, audience, status]); return res.status(201).json(r.rows[0]); }
+    const v = { id: mem.seq.videos++, author_id, title, description, file_path, duration_seconds, audience, status, views: 0, created_at: new Date().toISOString() }; mem.videos.push(v); res.status(201).json(v);
+  } catch (e) { res.status(500).json({ error: 'Video upload failed: ' + e.message }); }
+});
+app.post('/api/videos/:id/view', async (req, res) => {
+  if (useDb) await q('UPDATE videos SET views=views+1 WHERE id=$1', [req.params.id]);
+  else { const v = mem.videos.find((x) => x.id === Number(req.params.id)); if (v) v.views++; }
+  res.json({ ok: true });
+});
+
 app.get('/api/earnings/:authorId', async (req, res) => {
   const stories = (await listStories(true)).filter((s) => s.author_id === Number(req.params.authorId));
   const totalReads = stories.reduce((n, s) => n + (s.reads || 0), 0);
@@ -250,6 +306,7 @@ app.post('/api/memberships', async (req, res) => {
   // $25/month Creator Membership. No payment is taken here — Stripe checkout
   // must be wired in before charging anyone.
   if (useDb) { const r = await q('INSERT INTO memberships(author_id,plan,price_cents) VALUES($1,$2,$3) RETURNING *', [req.body.author_id, 'creator', 2500]); return res.status(201).json({ ...r.rows[0], note: 'Membership recorded as a model only — no payment taken. Wire Stripe Checkout before charging $25/month.' }); }
+  mem.memberships.push({ author_id: Number(req.body.author_id), plan: 'creator', price_cents: 2500 });
   res.status(201).json({ author_id: req.body.author_id, plan: 'creator', price_cents: 2500, note: 'Membership recorded as a model only — no payment taken.' });
 });
 app.get('/api/tax/:authorId/:year', async (req, res) => {
