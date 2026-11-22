@@ -116,14 +116,21 @@ async function openProfile(id) {
     <p>Friends: ${a.friendCount} · Top 5: ${(a.topFriends || []).map((t) => '#' + t.rank).join(', ') || '—'}</p>
     <p>🎵 ${esc(a.song_title || 'No song yet')} — ${esc(a.song_artist || '')} ${a.song_url ? `<a href="${esc(a.song_url)}" target="_blank" rel="noopener">Listen</a>` : ''}</p>
     <p>Skins: ${Object.entries(skins).map(([k, v]) => `<span class="skin" onclick="setSkin(${a.id},'${k}')">${esc(v.name)}</span>`).join('')}</p>
-    <p>Custom skin (direct image link): <input id="csUrl" placeholder="https://…/skin.jpg"> <button onclick="addCustomSkin(${a.id})">Import skin</button></p>
+    <p>Custom skin — paste a direct image link, or a whole MySpace layout code: <input id="csUrl" placeholder="Paste image link or layout code…"> <button onclick="addCustomSkin(${a.id})">Import skin</button></p>
     <div class="chatbox"><b>🤖 ${esc(a.name)}'s AI Companion</b><p>${esc(a.bot_greeting || '')} — I am an AI, not ${esc(a.name)}.</p>
     <input id="chatMsg" placeholder="Ask about their life story…"><button onclick="chat(${a.id})">Send</button> <button onclick="voiceChat(${a.id})">🎤 Voice call</button><div id="chatOut"></div></div>
     <p>Stories: ${(a.stories || []).map((s) => esc(s.title)).join(', ') || '—'} · Total reads: ${a.totalReads}</p></div>`;
   $('profileDetail').scrollIntoView();
 }
 async function setSkin(id, skin) { await api(`/api/authors/${id}/style`, { method: 'POST', body: JSON.stringify({ skin }) }); loadAuthors(); openProfile(id); }
-async function addCustomSkin(id) { try { const s = await api(`/api/authors/${id}/custom-skins`, { method: 'POST', body: JSON.stringify({ name: 'Custom skin', image_url: $('csUrl').value }) }); await api(`/api/authors/${id}/style`, { method: 'POST', body: JSON.stringify({ custom_skin_url: s.image_url, custom_skin_name: s.name }) }); alert('Custom skin imported and applied.'); } catch (e) { alert(e.message); } }
+async function addCustomSkin(id) {
+  // Easy for users: paste a direct image link, OR paste a whole MySpace
+  // layout code block — we pull the background image URL out of it.
+  const raw = $('csUrl').value || '';
+  const found = raw.match(/https?:\/\/[^\s"'\)]+\.(?:jpg|jpeg|png|gif|webp)(?:\?[^\s"'\)]*)?/i);
+  const imageUrl = found ? found[0] : raw.trim();
+  if (!imageUrl) { alert('Paste an image link or a MySpace layout code with an image in it.'); return; }
+  try { const s = await api(`/api/authors/${id}/custom-skins`, { method: 'POST', body: JSON.stringify({ name: 'Custom skin', image_url: imageUrl }) }); await api(`/api/authors/${id}/style`, { method: 'POST', body: JSON.stringify({ custom_skin_url: s.image_url, custom_skin_name: s.name }) }); alert('Custom skin imported and applied.'); loadAuthors(); openProfile(id); } catch (e) { alert(e.message); } }
 async function chat(id) { const m = $('chatMsg').value; const d = await api(`/api/companion/${id}/chat`, { method: 'POST', body: JSON.stringify({ message: m, adult }) }); $('chatOut').innerHTML += `<p><b>You:</b> ${esc(m)}</p><p><b>AI:</b> ${esc(d.reply)}</p>`; }
 function voiceChat(id) {
   // Voice call in the browser: speech recognition + speech synthesis.
