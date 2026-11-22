@@ -128,8 +128,19 @@ async function openProfile(id) {
     ${editHtml}
     <div class="chatbox"><b>🤖 ${esc(a.name)}'s AI Companion</b><p>${esc(a.bot_greeting || '')} — I am an AI, not ${esc(a.name)}.</p>
     <input id="chatMsg" placeholder="Ask about their life story…"><button onclick="chat(${a.id})">Send</button> <button onclick="voiceChat(${a.id})">🎤 Voice call</button><div id="chatOut"></div></div>
-    <p>Stories: ${(a.stories || []).map((s) => esc(s.title)).join(', ') || '—'} · Total reads: ${a.totalReads}</p></div>`;
+    <h4>${esc(a.name)}'s stories</h4><div id="profileStories">${(a.stories || []).map((s) => `<div class="card"><b>${esc(s.title)}</b><p>${esc((s.body || '').slice(0, 200))}</p><button onclick="openStory(${s.id})">Read</button></div>`).join('') || '<p>No stories yet.</p>'}</div>
+    <h4>${esc(a.name)}'s videos</h4><div id="profileVideos"><p>Loading videos…</p></div>
+    ${isMine ? `<h4>Publish on your page</h4>
+    <input id="pfTitle" placeholder="Story title"><textarea id="pfBody" placeholder="Write your story…"></textarea><button onclick="publishProfileStory(${a.id})">Publish story</button><p id="pfMsg"></p>
+    <p><button onclick="document.querySelector('[data-nav=record-video]').click()">🎥 Record a video for your page</button></p>` : ''}
+    <p>Total reads: ${a.totalReads}</p></div>`;
   $('profileDetail').scrollIntoView();
+  const vids = await api(`/api/videos?adult=${adult ? 1 : 0}`);
+  $('profileVideos').innerHTML = vids.filter((v) => v.author_id === a.id).map((v) => `<div class="card"><b>${esc(v.title)}</b> — ${fmtTime(v.duration_seconds || 0)} · 👁 ${v.views} ${v.audience === 'adult' ? '· 18+' : ''}<br><video controls preload="metadata" src="${esc(v.file_path)}" style="width:100%;max-width:560px"></video></div>`).join('') || '<p>No videos yet.</p>';
+}
+async function publishProfileStory(id) {
+  try { const s = await api('/api/stories', { method: 'POST', body: JSON.stringify({ author_id: id, title: $('pfTitle').value, body: $('pfBody').value, category: 'Life story' }) }); $('pfMsg').textContent = s.audience === 'adult' ? 'Published as 18+ adults-only.' : 'Published on your page!'; openProfile(id); }
+  catch (e) { $('pfMsg').textContent = e.message; }
 }
 async function setSkin(id, skin) { await api(`/api/authors/${id}/style`, { method: 'POST', body: JSON.stringify({ skin }) }); loadAuthors(); openProfile(id); }
 async function addCustomSkin(id) {
