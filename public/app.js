@@ -67,9 +67,23 @@ document.querySelectorAll('[data-legal]').forEach((b) => b.onclick = async () =>
 async function loadStories() {
   const q = $('search').value, cat = $('category').value;
   const list = await api(`/api/stories?adult=${adult ? 1 : 0}&q=${encodeURIComponent(q)}&category=${encodeURIComponent(cat)}`);
-  $('stories').innerHTML = list.map((s) => `<div class="card"><h3>${esc(s.title)}</h3><p>${esc(s.body.slice(0, 300))}</p><p>👁 ${s.reads} · ❤️ ${s.likes} · ${esc(s.category)} ${s.audience === 'adult' ? '· 18+' : ''}</p><button onclick="openStory(${s.id})">Read</button> <button onclick="likeStory(${s.id})">Like</button> <button onclick="report('story',${s.id})">🚩 Report</button></div>`).join('') || '<p>No stories yet — publish the first one.</p>';
+  $('stories').innerHTML = list.map((s) => `<div class="card" onclick="openStory(${s.id})" style="cursor:pointer"><h3>${esc(s.title)}</h3><p>${esc(s.body.slice(0, 300))}</p><p>👁 ${s.reads} · ❤️ ${s.likes} · ${esc(s.category)} ${s.audience === 'adult' ? '· 18+' : ''}</p><button onclick="event.stopPropagation();openStory(${s.id})">Read</button> <button onclick="event.stopPropagation();likeStory(${s.id})">Like</button> <button onclick="event.stopPropagation();report('story',${s.id})">🚩 Report</button></div>`).join('') || '<p>No stories yet — publish the first one.</p>';
 }
-async function openStory(id) { const s = await api(`/api/stories/${id}?adult=${adult ? 1 : 0}`); alert(`${s.title}\n\n${s.body}\n\nReads: ${s.reads}`); loadStories(); }
+async function openStory(id) {
+  const s = await api(`/api/stories/${id}?adult=${adult ? 1 : 0}`);
+  $('storyDetail').innerHTML = `<div class="card"><button onclick="$('storyDetail').innerHTML='';loadStories()">← Back to all stories</button>
+    <h3>${esc(s.title)}</h3><p>${esc(s.body)}</p>
+    <p>👁 ${s.reads} · ❤️ ${s.likes} · ${esc(s.category)} ${s.audience === 'adult' ? '· 18+' : ''}</p>
+    <button onclick="likeStory(${s.id})">❤️ Like</button> <button onclick="report('story',${s.id})">🚩 Report</button>
+    <h4>Comments</h4><div>${(s.comments || []).map((c) => `<p><b>${esc(c.author_name)}</b>: ${esc(c.body)}</p>`).join('') || '<p>No comments yet.</p>'}</div>
+    <input id="commentName" placeholder="Your name"><input id="commentBody" placeholder="Write a comment…"><button onclick="addComment(${s.id})">Post comment</button><p id="commentMsg"></p></div>`;
+  $('storyDetail').scrollIntoView();
+  loadStories();
+}
+async function addComment(id) {
+  try { await api(`/api/stories/${id}/comments`, { method: 'POST', body: JSON.stringify({ author_name: $('commentName').value || 'Guest', body: $('commentBody').value }) }); openStory(id); }
+  catch (e) { $('commentMsg').textContent = e.message; }
+}
 async function likeStory(id) { await api(`/api/stories/${id}/like`, { method: 'POST' }); loadStories(); }
 async function report(type, id) { const reason = prompt('Reason for report?') || 'Reported'; await api('/api/reports', { method: 'POST', body: JSON.stringify({ target_type: type, target_id: id, reason }) }); alert('Reported to the Safety queue.'); }
 $('search').oninput = loadStories; $('category').onchange = loadStories;
