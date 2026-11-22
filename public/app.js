@@ -67,14 +67,23 @@ document.querySelectorAll('[data-legal]').forEach((b) => b.onclick = async () =>
 async function loadStories() {
   const q = $('search').value, cat = $('category').value;
   const list = await api(`/api/stories?adult=${adult ? 1 : 0}&q=${encodeURIComponent(q)}&category=${encodeURIComponent(cat)}`);
-  $('stories').innerHTML = list.map((s) => `<div class="card" onclick="openStory(${s.id})" style="cursor:pointer"><h3>${esc(s.title)}</h3><p>${esc(s.body.slice(0, 300))}</p><p>👁 ${s.reads} · ❤️ ${s.likes} · ${esc(s.category)} ${s.audience === 'adult' ? '· 18+' : ''}</p><button onclick="event.stopPropagation();openStory(${s.id})">Read</button> <button onclick="event.stopPropagation();likeStory(${s.id})">Like</button> <button onclick="event.stopPropagation();report('story',${s.id})">🚩 Report</button></div>`).join('') || '<p>No stories yet — publish the first one.</p>';
+  $('stories').innerHTML = list.map((s) => `<div class="card" onclick="openStory(${s.id})" style="cursor:pointer"><h3>${esc(s.title)}</h3><p>${esc(s.body.slice(0, 300))}</p><p>👁 ${s.reads} · ❤️ ${s.likes} · ${esc(s.category)} ${s.audience === 'adult' ? '· 18+' : ''}</p><button onclick="event.stopPropagation();openStory(${s.id})">Read</button> <button onclick="event.stopPropagation();likeStory(${s.id})">Like</button> <button onclick="event.stopPropagation();shareStory(${s.id},'${esc(s.title).replace(/'/g, '')}')">Share</button> <button onclick="event.stopPropagation();report('story',${s.id})">🚩 Report</button></div>`).join('') || '<p>No stories yet — publish the first one.</p>';
+}
+async function shareStory(id, title) {
+  const url = location.origin + '/#story-' + id;
+  const text = `${title} — read it on BioLifeDrive`;
+  try {
+    if (navigator.share) { await navigator.share({ title: 'BioLifeDrive', text, url }); return; }
+    await navigator.clipboard.writeText(url);
+    alert('Link copied — share it anywhere.');
+  } catch { prompt('Copy this link to share:', url); }
 }
 async function openStory(id) {
-  const s = await api(`/api/stories/${id}?adult=${adult ? 1 : 0}`);
+  const s = await api(`/api/stories/${id}?adult=${adult ? 1 : 0}&viewer=${myProfileId() || ''}`);
   $('storyDetail').innerHTML = `<div class="card"><button onclick="$('storyDetail').innerHTML='';loadStories()">← Back to all stories</button>
     <h3>${esc(s.title)}</h3><p>${esc(s.body)}</p>
     <p>👁 ${s.reads} · ❤️ ${s.likes} · ${esc(s.category)} ${s.audience === 'adult' ? '· 18+' : ''}</p>
-    <button onclick="likeStory(${s.id})">❤️ Like</button> <button onclick="report('story',${s.id})">🚩 Report</button>
+    <button onclick="likeStory(${s.id})">❤️ Like</button> <button onclick="shareStory(${s.id},'${esc(s.title).replace(/'/g, '')}')">Share</button> <button onclick="report('story',${s.id})">🚩 Report</button>
     <h4>Comments</h4><div>${(s.comments || []).map((c) => `<p><b>${esc(c.author_name)}</b>: ${esc(c.body)}</p>`).join('') || '<p>No comments yet.</p>'}</div>
     <input id="commentName" placeholder="Your name"><input id="commentBody" placeholder="Write a comment…"><button onclick="addComment(${s.id})">Post comment</button><p id="commentMsg"></p></div>`;
   $('storyDetail').scrollIntoView();
@@ -168,3 +177,6 @@ $('taxBtn').onclick = () => { window.open(`/api/tax/${$('earnAuthor').value || 1
 $('reportBtn').onclick = async () => { await api('/api/reports', { method: 'POST', body: JSON.stringify({ target_type: 'manual', target_id: 0, reason: $('reportReason').value, details: $('reportTarget').value }) }); $('reportMsg').textContent = 'Reported.'; const r = await api('/api/reports'); $('reports').innerHTML = r.map((x) => `<div class="card">${esc(x.reason)} — ${esc(x.status)}</div>`).join(''); };
 
 loadStories(); loadAuthors(); loadVideos();
+
+// Shared story link: biolifedrive.com/#story-12 opens that story.
+if (location.hash.startsWith('#story-')) { const sid = Number(location.hash.replace('#story-', '')); if (sid) setTimeout(() => openStory(sid), 300); }

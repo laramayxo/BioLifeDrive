@@ -202,10 +202,12 @@ app.post('/api/stories', async (req, res) => {
 app.get('/api/stories/:id', async (req, res) => {
   const s = await getStory(req.params.id); if (!s) return res.status(404).json({ error: 'not found' });
   if (s.audience === 'adult' && req.query.adult !== '1') return res.status(403).json({ error: '18+ only' });
-  if (useDb) await q('UPDATE stories SET reads=reads+1 WHERE id=$1', [s.id]);
-  else s.reads++;
+  // Fair read counts: the author viewing their own story does not add a
+  // view. The viewer id comes from the browser's own-profile marker.
+  const counted = Number(req.query.viewer) !== s.author_id;
+  if (counted) { if (useDb) await q('UPDATE stories SET reads=reads+1 WHERE id=$1', [s.id]); else s.reads++; }
   const comments = useDb ? (await q('SELECT * FROM comments WHERE story_id=$1 ORDER BY id', [s.id])).rows : mem.comments.filter((c) => c.story_id === s.id);
-  res.json({ ...s, reads: s.reads + 1, comments });
+  res.json({ ...s, reads: s.reads + (counted ? 1 : 0), comments });
 });
 app.post('/api/stories/:id/like', async (req, res) => {
   if (useDb) await q('UPDATE stories SET likes=likes+1 WHERE id=$1', [req.params.id]); else { const s = await getStory(req.params.id); if (s) s.likes++; }
