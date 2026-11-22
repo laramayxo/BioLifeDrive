@@ -101,7 +101,7 @@ $('createProfileBtn').onclick = async () => {
 async function loadAuthors() {
   skins = await api('/api/skins');
   const list = await api('/api/authors');
-  $('authors').innerHTML = list.map((a) => `<div class="card" style="background:${(skins[a.skin] || {}).bg || '#fff'}"><b>${esc(a.name)}</b> — ${esc(a.bio || '')}<br>Song: ${esc(a.song_title || '—')} ${esc(a.song_artist || '')}<br><button onclick="openProfile(${a.id})">Open profile</button> <button onclick="addFriend(${a.id})">Add Friend</button> <button onclick="follow(${a.id})">Follow</button></div>`).join('') || '<p>No profiles yet.</p>';
+  $('authors').innerHTML = list.map((a) => `<div class="card" style="${a.custom_skin_url ? `background-image:url('${esc(a.custom_skin_url)}');background-size:cover;background-position:center;` : `background:${(skins[a.skin] || {}).bg || '#fff'}`}"><b>${esc(a.name)}</b> — ${esc(a.bio || '')}<br>Song: ${esc(a.song_title || '—')} ${esc(a.song_artist || '')}<br><button onclick="openProfile(${a.id})">Open profile</button> <button onclick="addFriend(${a.id})">Add Friend</button> <button onclick="follow(${a.id})">Follow</button></div>`).join('') || '<p>No profiles yet.</p>';
   const eps = await api('/api/episodes');
   $('episodes').innerHTML = eps.map((e) => `<div class="card"><b>${esc(e.title)}</b> — ${e.duration_minutes} min · ${e.views} views<br><a href="${esc(e.youtube_url)}" target="_blank" rel="noopener">Watch on YouTube</a> <button onclick="viewEp(${e.id})">Mark viewed</button></div>`).join('') || '<p>No episodes yet.</p>';
 }
@@ -111,7 +111,7 @@ async function viewEp(id) { await api(`/api/episodes/${id}/view`, { method: 'POS
 async function openProfile(id) {
   const a = await api('/api/authors/' + id);
   const skin = skins[a.skin] || {};
-  $('profileDetail').innerHTML = `<div class="card" style="background:${skin.bg || '#fff'}">
+  $('profileDetail').innerHTML = `<div class="card" style="${a.custom_skin_url ? `background-image:url('${esc(a.custom_skin_url)}');background-size:cover;background-position:center;` : `background:${skin.bg || '#fff'}`}">
     <h3>${esc(a.name)}</h3><p>${esc(a.bio || '')}</p>
     <p>Friends: ${a.friendCount} · Top 5: ${(a.topFriends || []).map((t) => '#' + t.rank).join(', ') || '—'}</p>
     <p>🎵 ${esc(a.song_title || 'No song yet')} — ${esc(a.song_artist || '')} ${a.song_url ? `<a href="${esc(a.song_url)}" target="_blank" rel="noopener">Listen</a>` : ''}</p>
