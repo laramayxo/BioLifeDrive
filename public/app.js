@@ -28,6 +28,29 @@ function topCreateProfile() {
   document.querySelector('[data-nav=create-profile]').click();
   refreshCreateProfile();
 }
+// ---------- Search people by username (top-right search bar) ----------
+async function searchPeople() {
+  const q = $('peopleSearch').value.trim().toLowerCase();
+  const box = $('peopleSearchResults');
+  if (!q) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+  const list = await api('/api/authors');
+  const matches = list.filter((a) => a.name.toLowerCase().includes(q)).slice(0, 8);
+  box.innerHTML = matches.length
+    ? matches.map((a) => `<button onclick="openProfile(${a.id});$('peopleSearchResults').classList.add('hidden')">${esc(a.name)} — ${esc(a.bio || '')}</button>`).join('')
+    : `<p>No one found for "${esc($('peopleSearch').value.trim())}".</p>`;
+  box.classList.remove('hidden');
+}
+$('peopleSearch').addEventListener('input', searchPeople);
+$('peopleSearch').addEventListener('keydown', async (e) => {
+  if (e.key === 'Enter') {
+    const list = await api('/api/authors');
+    const q = $('peopleSearch').value.trim().toLowerCase();
+    const m = list.find((a) => a.name.toLowerCase().includes(q));
+    $('peopleSearchResults').classList.add('hidden');
+    if (m) openProfile(m.id);
+  }
+});
+document.addEventListener('click', (e) => { if (!$('peopleSearch').contains(e.target) && !$('peopleSearchResults').contains(e.target)) $('peopleSearchResults').classList.add('hidden'); });
 function showAuth(mode) {
   authMode = mode || 'signup';
   $('authTitle').textContent = authMode === 'signup' ? 'Create your account' : 'Sign in';

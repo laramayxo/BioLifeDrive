@@ -470,7 +470,7 @@ function smartFallback(a, msg, stories, visibleStories, hiddenCount, adult) {
   const m = msg.toLowerCase().trim();
   const storyList = visibleStories.map((s) => `"${s.title}"`).join(', ');
   if (!m) return a.bot_greeting || 'I am your AI companion, where you can have an intelligent conversation with me.';
-  if (/who are you|are you (the )?(real|person)|your name/.test(m)) return 'I am your AI companion, chat with me about anything.';
+  if (/who are you|are you (the )?(real|person)|your name/.test(m)) return a.bot_greeting || 'I am your AI companion, where you can have an intelligent conversation with me.';
   if (/^(hi|hello|hey|hiya|good morning|good afternoon|good evening)\b/.test(m)) return `Hi, good to talk to you. ${visibleStories.length ? `${a.name} has ${visibleStories.length} ${visibleStories.length === 1 ? 'story' : 'stories'} here — ${storyList}.` : `${a.name} hasn't published a story yet.`} What would you like to talk about?`;
   if (/how are you|how('s| is) it going|how do you feel/.test(m)) return `I'm doing well, thanks for asking. I'm here to chat about anything — ${a.name}'s life stories, or something on your mind. What's up?`;
   if (/thank/.test(m)) return `You're welcome. Anything else you want to talk about?`;

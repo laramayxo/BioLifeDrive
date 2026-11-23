@@ -37,6 +37,13 @@ header {
   z-index: 10;
 }
 .logo { font-size: 22px; font-weight: 800; color: #fff; letter-spacing: -.3px; white-space: nowrap; cursor: pointer; }
+.people-search { position: relative; }
+.people-search input { width: 180px; margin: 0; background: #fff; }
+.people-results { position: absolute; right: 0; top: 42px; width: 240px; background: #fff; color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 4px 12px rgba(0, 0, 0, .18); z-index: 60; overflow: hidden; }
+.people-results.hidden { display: none; }
+.people-results button { display: block; width: 100%; text-align: left; background: #fff; color: var(--text); border: 0; border-radius: 0; padding: 10px 12px; margin: 0; font-weight: 600; }
+.people-results button:hover { background: #f0f2f5; }
+.people-results p { margin: 0; padding: 10px 12px; color: var(--muted); font-size: 13px; }
 .auth-area { display: flex; gap: 6px; align-items: center; }
 .auth-area button { background: #fff; color: var(--blue); }
 .auth-area button:hover { background: #e7f0fe; }
