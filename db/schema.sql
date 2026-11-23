@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS authors (
   name TEXT NOT NULL,
   bio TEXT DEFAULT '',
   skin TEXT DEFAULT 'classic-blue',
+  avatar_url TEXT,
   custom_skin_url TEXT,
   custom_skin_name TEXT,
   song_title TEXT,
@@ -20,6 +21,7 @@ CREATE TABLE IF NOT EXISTS authors (
   total_reads INT DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE authors ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 
 CREATE TABLE IF NOT EXISTS stories (
   id SERIAL PRIMARY KEY,

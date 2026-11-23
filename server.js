@@ -121,7 +121,7 @@ async function createAuthor({ name, bio }) {
   const status = moderate(`${name} ${bio}`);
   if (status === 'blocked') throw new Error('Profile blocked by moderation');
   if (useDb) return (await q('INSERT INTO authors(name,bio) VALUES($1,$2) RETURNING *', [name, bio || ''])).rows[0];
-  const a = { id: mem.seq.authors++, name, bio: bio || '', skin: 'classic-blue', custom_skin_url: null, custom_skin_name: null, song_title: '', song_artist: '', song_url: '', bot_enabled: true, bot_greeting: 'I am your AI companion, chat with me about anything', bot_personality: 'Warm, curious, and encouraging', bot_topics: '', bot_tone: 'Friendly', total_reads: 0, created_at: new Date().toISOString() };
+  const a = { id: mem.seq.authors++, name, bio: bio || '', skin: 'classic-blue', avatar_url: null, custom_skin_url: null, custom_skin_name: null, song_title: '', song_artist: '', song_url: '', bot_enabled: true, bot_greeting: 'I am your AI companion, chat with me about anything', bot_personality: 'Warm, curious, and encouraging', bot_topics: '', bot_tone: 'Friendly', total_reads: 0, created_at: new Date().toISOString() };
   mem.authors.push(a); return a;
 }
 async function listStories(adultMode) {
@@ -165,11 +165,21 @@ app.post('/api/authors/:id/top-five', async (req, res) => {
   res.json({ ok: true });
 });
 app.post('/api/authors/:id/style', async (req, res) => {
-  const { skin, song_title, song_artist, song_url, custom_skin_url, custom_skin_name, bot_enabled, bot_greeting, bot_personality, bot_topics, bot_tone } = req.body;
+  const { skin, avatar_url, song_title, song_artist, song_url, custom_skin_url, custom_skin_name, bot_enabled, bot_greeting, bot_personality, bot_topics, bot_tone } = req.body;
   if (moderate(`${song_title || ''} ${song_artist || ''} ${bot_greeting || ''}`) === 'blocked') return res.status(400).json({ error: 'Blocked by moderation' });
-  if (useDb) await q('UPDATE authors SET skin=COALESCE($2,skin), song_title=COALESCE($3,song_title), song_artist=COALESCE($4,song_artist), song_url=COALESCE($5,song_url), custom_skin_url=COALESCE($6,custom_skin_url), custom_skin_name=COALESCE($7,custom_skin_name), bot_enabled=COALESCE($8,bot_enabled), bot_greeting=COALESCE($9,bot_greeting), bot_personality=COALESCE($10,bot_personality), bot_topics=COALESCE($11,bot_topics), bot_tone=COALESCE($12,bot_tone) WHERE id=$1', [req.params.id, skin, song_title, song_artist, song_url, custom_skin_url, custom_skin_name, bot_enabled, bot_greeting, bot_personality, bot_topics, bot_tone]);
-  else { const a = await getAuthor(req.params.id); if (a) Object.assign(a, { skin: skin || a.skin, song_title: song_title ?? a.song_title, song_artist: song_artist ?? a.song_artist, song_url: song_url ?? a.song_url, custom_skin_url: custom_skin_url ?? a.custom_skin_url, custom_skin_name: custom_skin_name ?? a.custom_skin_name, bot_enabled: bot_enabled ?? a.bot_enabled, bot_greeting: bot_greeting ?? a.bot_greeting, bot_personality: bot_personality ?? a.bot_personality, bot_topics: bot_topics ?? a.bot_topics, bot_tone: bot_tone ?? a.bot_tone }); }
+  if (useDb) await q('UPDATE authors SET skin=COALESCE($2,skin), song_title=COALESCE($3,song_title), song_artist=COALESCE($4,song_artist), song_url=COALESCE($5,song_url), custom_skin_url=COALESCE($6,custom_skin_url), custom_skin_name=COALESCE($7,custom_skin_name), bot_enabled=COALESCE($8,bot_enabled), bot_greeting=COALESCE($9,bot_greeting), bot_personality=COALESCE($10,bot_personality), bot_topics=COALESCE($11,bot_topics), bot_tone=COALESCE($12,bot_tone), avatar_url=COALESCE($13,avatar_url) WHERE id=$1', [req.params.id, skin, song_title, song_artist, song_url, custom_skin_url, custom_skin_name, bot_enabled, bot_greeting, bot_personality, bot_topics, bot_tone, avatar_url]);
+  else { const a = await getAuthor(req.params.id); if (a) Object.assign(a, { skin: skin || a.skin, avatar_url: avatar_url ?? a.avatar_url, song_title: song_title ?? a.song_title, song_artist: song_artist ?? a.song_artist, song_url: song_url ?? a.song_url, custom_skin_url: custom_skin_url ?? a.custom_skin_url, custom_skin_name: custom_skin_name ?? a.custom_skin_name, bot_enabled: bot_enabled ?? a.bot_enabled, bot_greeting: bot_greeting ?? a.bot_greeting, bot_personality: bot_personality ?? a.bot_personality, bot_topics: bot_topics ?? a.bot_topics, bot_tone: bot_tone ?? a.bot_tone }); }
   res.json({ ok: true });
+});
+// Upload a profile picture for a profile (owner only in the UI).
+app.post('/api/authors/:id/avatar-upload', express.raw({ type: 'image/*', limit: '5mb' }), async (req, res) => {
+  const a = await getAuthor(req.params.id); if (!a) return res.status(404).json({ error: 'Profile not found.' });
+  if (!req.body || !req.body.length) return res.status(400).json({ error: 'No image received.' });
+  const ct = String(req.headers['content-type'] || 'image/jpeg');
+  const ext = ct.includes('png') ? 'png' : ct.includes('gif') ? 'gif' : ct.includes('webp') ? 'webp' : 'jpg';
+  const name = `avatar-${req.params.id}-${Date.now()}.${ext}`;
+  fs.writeFileSync(path.join(UPLOADS_DIR, name), req.body);
+  res.json({ url: `/uploads/${name}` });
 });
 // Upload a song file for a profile (owner only in the UI). Stored under
 // /uploads/ and served at /uploads/<file>. Railway disk is ephemeral, so

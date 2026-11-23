@@ -138,35 +138,86 @@ async function viewEp(id) { await api(`/api/episodes/${id}/view`, { method: 'POS
 async function openProfile(id) {
   const a = await api('/api/authors/' + id);
   const skin = skins[a.skin] || {};
-  // Skin / custom-skin controls are private: only the profile owner sees
-  // them, on their own profile. Everyone else sees the profile, friends,
-  // song and AI companion — but no editing controls.
+  // Editing controls are private: only the profile owner sees them, on
+  // their own profile. Everyone else sees the picture, friends, song and
+  // AI companion — but no editing controls.
   const isMine = String(a.id) === String(myProfileId());
-  const editHtml = isMine ? `
-    <p>Skins: ${Object.entries(skins).map(([k, v]) => `<span class="skin" onclick="setSkin(${a.id},'${k}')">${esc(v.name)}</span>`).join('')}</p>
-    <p>Custom skin — paste a direct image link, or a whole profile layout code: <input id="csUrl" placeholder="Paste image link or layout code…"> <button onclick="addCustomSkin(${a.id})">Import skin</button></p>
-    <h4>🎵 Your profile song</h4>
+  const friendsById = Object.fromEntries((a.friends || []).map((f) => [String(f.id), f]));
+  const topSlots = [1, 2, 3, 4, 5].map((rank) => {
+    const t = (a.topFriends || []).find((x) => Number(x.rank) === rank);
+    const f = t ? friendsById[String(t.friend_id)] : null;
+    return f || null;
+  });
+  // If no Top 5 was picked yet, show the first 5 friends as the Top 5.
+  const top5 = topSlots.some(Boolean) ? topSlots : (a.friends || []).slice(0, 5);
+  const top5Html = top5.map((f, i) => f
+    ? `<div class="top5-friend"><button onclick="openProfile(${f.id})" style="all:unset;cursor:pointer;display:block">${f.avatar_url ? `<img src="${esc(f.avatar_url)}" alt="">` : `<span class="top5-initial">${esc((f.name || '?')[0])}</span>`}<b>${esc(f.name)}</b></button></div>`
+    : `<div class="top5-friend top5-empty"><span class="top5-initial">·</span><b>Top ${i + 1} — open</b></div>`).join('');
+  const picHtml = a.avatar_url
+    ? `<img class="profile-pic" src="${esc(a.avatar_url)}" alt="${esc(a.name)}">`
+    : `<div class="profile-pic profile-pic-empty">${esc((a.name || '?')[0])}</div>`;
+  const musicHtml = `
+    <div class="music-box"><h4>🎵 ${esc(a.song_title || 'No song yet')}</h4>
+    <p>${esc(a.song_artist || '')}</p>
+    ${a.song_url ? `<audio controls preload="none" src="${esc(a.song_url)}" style="width:100%"></audio>` : ''}
+    ${isMine ? `
     <p>Search for a song: <input id="songSearch" placeholder="Song or artist…"> <button onclick="searchSongs(${a.id})">Search</button></p>
     <div id="songResults"></div>
     <p>Or upload your own song file (MP3/M4A/WAV, up to 15 MB — only upload a song you own or have permission to share): <input type="file" id="songFile" accept="audio/*"> <button onclick="uploadSong(${a.id})">Upload song</button></p>
-    <p id="songMsg"></p>`
+    <p id="songMsg"></p>` : ''}
+    </div>`;
+  const editHtml = isMine ? `
+    <p>Skins: ${Object.entries(skins).map(([k, v]) => `<span class="skin" onclick="setSkin(${a.id},'${k}')">${esc(v.name)}</span>`).join('')}</p>
+    <p>Custom skin — paste a direct image link, or a whole profile layout code: <input id="csUrl" placeholder="Paste image link or layout code…"> <button onclick="addCustomSkin(${a.id})">Import skin</button></p>
+    <h4>Pick your Top 5</h4>
+    ${[1, 2, 3, 4, 5].map((rank) => `<p>#${rank} <select id="top5-${rank}" onchange="setTopFive(${a.id}, ${rank}, this.value)"><option value="">— none —</option>${(a.friends || []).map((f) => `<option value="${f.id}" ${(topSlots[rank - 1] && String(topSlots[rank - 1].id) === String(f.id)) ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select></p>`).join('')}`
     : `<p><button onclick="claimProfile(${a.id})">This is my profile</button></p>`;
   $('profileDetail').innerHTML = `<div class="card" style="${a.custom_skin_url ? `background-image:url('${esc(a.custom_skin_url)}');background-size:cover;background-position:center;` : `background:${skin.bg || '#fff'}`}">
-    <h3>${esc(a.name)}</h3><p>${esc(a.bio || '')}</p>
-    <p>Friends: ${a.friendCount} · Top 5: ${(a.topFriends || []).map((t) => '#' + t.rank).join(', ') || '—'}</p>
-    <p>🎵 ${esc(a.song_title || 'No song yet')} — ${esc(a.song_artist || '')} ${a.song_url ? `<br><audio controls preload="none" src="${esc(a.song_url)}" style="width:100%;max-width:320px"></audio>` : ''}</p>
-    ${editHtml}
-    <div class="chatbox"><b>🤖 ${esc(a.name)}'s AI Companion</b><p>${esc(a.bot_greeting || 'I am your AI companion, chat with me about anything')}</p>
-    <input id="chatMsg" placeholder="Ask about their life story…"><button onclick="chat(${a.id})">Send</button> <button onclick="voiceChat(${a.id})">🎤 Voice call</button><div id="chatOut"></div></div>
-    <h4>${esc(a.name)}'s stories</h4><div id="profileStories">${(a.stories || []).map((s) => `<div class="card"><b>${esc(s.title)}</b><p>${esc((s.body || '').slice(0, 200))}</p><button onclick="openStory(${s.id})">Read</button></div>`).join('') || '<p>No stories yet.</p>'}</div>
-    <h4>${esc(a.name)}'s videos</h4><div id="profileVideos"><p>Loading videos…</p></div>
-    ${isMine ? `<h4>Publish on your page</h4>
-    <input id="pfTitle" placeholder="Story title"><textarea id="pfBody" placeholder="Write your story…"></textarea><button onclick="publishProfileStory(${a.id})">Publish story</button><p id="pfMsg"></p>
-    <p><button onclick="document.querySelector('[data-nav=record-video]').click()">🎥 Record a video for your page</button></p>` : ''}
-    <p>Total reads: ${a.totalReads}</p></div>`;
+    <div class="profile-layout">
+      <div class="profile-left">
+        ${picHtml}
+        ${isMine ? `<p><input type="file" id="avatarFile" accept="image/*"> <button onclick="uploadAvatar(${a.id})">Upload picture</button></p><p id="avatarMsg"></p>` : ''}
+        <h3>${esc(a.name)}</h3><p>${esc(a.bio || '')}</p>
+        <p>${esc(a.name)} has ${a.friendCount} friends · Total reads: ${a.totalReads}</p>
+        ${musicHtml}
+      </div>
+      <div class="profile-right">
+        <h4>${esc(a.name)}'s Top 5 Friends</h4>
+        <div class="top5-grid">${top5Html}</div>
+        <p>${(a.friends || []).map((f) => esc(f.name)).join(', ') || 'No friends yet — add friends from the Profiles tab.'}</p>
+        ${editHtml}
+        <div class="chatbox"><b>🤖 ${esc(a.name)}'s AI Companion</b><p>${esc(a.bot_greeting || 'I am your AI companion, chat with me about anything')}</p>
+        <input id="chatMsg" placeholder="Ask about their life story…"><button onclick="chat(${a.id})">Send</button> <button onclick="voiceChat(${a.id})">🎤 Voice call</button><div id="chatOut"></div></div>
+      </div>
+    </div>
+    <div class="profile-below">
+      <h4>${esc(a.name)}'s stories</h4><div id="profileStories">${(a.stories || []).map((s) => `<div class="card"><b>${esc(s.title)}</b><p>${esc((s.body || '').slice(0, 200))}</p><button onclick="openStory(${s.id})">Read</button></div>`).join('') || '<p>No stories yet.</p>'}</div>
+      <h4>${esc(a.name)}'s videos</h4><div id="profileVideos"><p>Loading videos…</p></div>
+      ${isMine ? `<h4>Publish on your page</h4>
+      <input id="pfTitle" placeholder="Story title"><textarea id="pfBody" placeholder="Write your story…"></textarea><button onclick="publishProfileStory(${a.id})">Publish story</button><p id="pfMsg"></p>
+      <p><button onclick="document.querySelector('[data-nav=record-video]').click()">🎥 Record a video for your page</button></p>` : ''}
+    </div></div>`;
   $('profileDetail').scrollIntoView();
   const vids = await api(`/api/videos?adult=${adult ? 1 : 0}`);
   $('profileVideos').innerHTML = vids.filter((v) => v.author_id === a.id).map((v) => `<div class="card"><b>${esc(v.title)}</b> — ${fmtTime(v.duration_seconds || 0)} · 👁 ${v.views} ${v.audience === 'adult' ? '· 18+' : ''}<br><video controls preload="metadata" src="${esc(v.file_path)}" style="width:100%;max-width:560px"></video></div>`).join('') || '<p>No videos yet.</p>';
+}
+async function uploadAvatar(id) {
+  const f = $('avatarFile').files && $('avatarFile').files[0];
+  if (!f) { $('avatarMsg').textContent = 'Choose a picture first.'; return; }
+  if (f.size > 5 * 1024 * 1024) { $('avatarMsg').textContent = 'That picture is over 5 MB. Pick a smaller one.'; return; }
+  $('avatarMsg').textContent = 'Uploading…';
+  try {
+    const r = await fetch(`/api/authors/${id}/avatar-upload`, { method: 'POST', headers: { 'Content-Type': f.type || 'image/jpeg' }, body: f });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Upload failed.');
+    await api(`/api/authors/${id}/style`, { method: 'POST', body: JSON.stringify({ avatar_url: d.url }) });
+    openProfile(id);
+  } catch (e) { $('avatarMsg').textContent = e.message; }
+}
+async function setTopFive(id, rank, friendId) {
+  if (!friendId) return;
+  await api(`/api/authors/${id}/top-five`, { method: 'POST', body: JSON.stringify({ friendId: Number(friendId), rank }) });
+  openProfile(id);
 }
 async function publishProfileStory(id) {
   try { const s = await api('/api/stories', { method: 'POST', body: JSON.stringify({ author_id: id, title: $('pfTitle').value, body: $('pfBody').value, category: 'Life story' }) }); $('pfMsg').textContent = s.audience === 'adult' ? 'Published as 18+ adults-only.' : 'Published on your page!'; openProfile(id); }
