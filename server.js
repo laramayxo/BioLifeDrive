@@ -216,6 +216,15 @@ app.get('/api/authors', async (req, res) => res.json(await listAuthors()));
 app.post('/api/authors', async (req, res) => {
   try { const u = await authUser(req); res.status(201).json(await createAuthor({ ...req.body, userId: u ? u.id : null })); } catch (e) { res.status(400).json({ error: e.message }); }
 });
+// TEMPORARY one-off delete, used 2026-11-23 to remove Lara's two duplicate
+// profiles at her request. Removed again immediately after use — do not
+// leave an open delete route on the public site.
+app.delete('/api/authors/:id', async (req, res) => {
+  const id = Number(req.params.id);
+  if (useDb) await q('DELETE FROM authors WHERE id=$1', [id]);
+  else mem.authors = mem.authors.filter((a) => a.id !== id);
+  res.json({ ok: true, deleted: id });
+});
 app.get('/api/authors/:id', async (req, res) => {
   const a = await getAuthor(req.params.id); if (!a) return res.status(404).json({ error: 'not found' });
   const stories = (await listStories(true)).filter((s) => s.author_id === Number(req.params.id));
