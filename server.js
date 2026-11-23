@@ -171,6 +171,19 @@ app.post('/api/authors/:id/style', async (req, res) => {
   else { const a = await getAuthor(req.params.id); if (a) Object.assign(a, { skin: skin || a.skin, song_title: song_title ?? a.song_title, song_artist: song_artist ?? a.song_artist, song_url: song_url ?? a.song_url, custom_skin_url: custom_skin_url ?? a.custom_skin_url, custom_skin_name: custom_skin_name ?? a.custom_skin_name, bot_enabled: bot_enabled ?? a.bot_enabled, bot_greeting: bot_greeting ?? a.bot_greeting, bot_personality: bot_personality ?? a.bot_personality, bot_topics: bot_topics ?? a.bot_topics, bot_tone: bot_tone ?? a.bot_tone }); }
   res.json({ ok: true });
 });
+// Upload a song file for a profile (owner only in the UI). Stored under
+// /uploads/ and served at /uploads/<file>. Railway disk is ephemeral, so
+// an uploaded song can be lost on redeploy — permanent storage is a later step.
+app.post('/api/authors/:id/song-upload', express.raw({ type: 'audio/*', limit: '15mb' }), async (req, res) => {
+  const a = await getAuthor(req.params.authorId || req.params.id); if (!a) return res.status(404).json({ error: 'Profile not found.' });
+  if (!req.body || !req.body.length) return res.status(400).json({ error: 'No audio file received.' });
+  const ct = String(req.headers['content-type'] || 'audio/mpeg');
+  const ext = ct.includes('wav') ? 'wav' : ct.includes('mp4') || ct.includes('m4a') ? 'm4a' : ct.includes('ogg') ? 'ogg' : ct.includes('webm') ? 'webm' : 'mp3';
+  const name = `song-${req.params.id}-${Date.now()}.${ext}`;
+  fs.writeFileSync(path.join(UPLOADS_DIR, name), req.body);
+  const title = String(req.query.title || 'My uploaded song').slice(0, 120) || 'My uploaded song';
+  res.json({ url: `/uploads/${name}`, title });
+});
 app.post('/api/authors/:id/custom-skins', async (req, res) => {
   const { name, image_url, source_url, source_label } = req.body;
   if (!image_url || !/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(image_url)) return res.status(400).json({ error: 'Paste a direct image link ending in .jpg, .png, .gif or .webp (not a web page).' });

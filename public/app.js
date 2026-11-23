@@ -144,12 +144,17 @@ async function openProfile(id) {
   const isMine = String(a.id) === String(myProfileId());
   const editHtml = isMine ? `
     <p>Skins: ${Object.entries(skins).map(([k, v]) => `<span class="skin" onclick="setSkin(${a.id},'${k}')">${esc(v.name)}</span>`).join('')}</p>
-    <p>Custom skin — paste a direct image link, or a whole profile layout code: <input id="csUrl" placeholder="Paste image link or layout code…"> <button onclick="addCustomSkin(${a.id})">Import skin</button></p>`
+    <p>Custom skin — paste a direct image link, or a whole profile layout code: <input id="csUrl" placeholder="Paste image link or layout code…"> <button onclick="addCustomSkin(${a.id})">Import skin</button></p>
+    <h4>🎵 Your profile song</h4>
+    <p>Search for a song: <input id="songSearch" placeholder="Song or artist…"> <button onclick="searchSongs(${a.id})">Search</button></p>
+    <div id="songResults"></div>
+    <p>Or upload your own song file (MP3/M4A/WAV, up to 15 MB — only upload a song you own or have permission to share): <input type="file" id="songFile" accept="audio/*"> <button onclick="uploadSong(${a.id})">Upload song</button></p>
+    <p id="songMsg"></p>`
     : `<p><button onclick="claimProfile(${a.id})">This is my profile</button></p>`;
   $('profileDetail').innerHTML = `<div class="card" style="${a.custom_skin_url ? `background-image:url('${esc(a.custom_skin_url)}');background-size:cover;background-position:center;` : `background:${skin.bg || '#fff'}`}">
     <h3>${esc(a.name)}</h3><p>${esc(a.bio || '')}</p>
     <p>Friends: ${a.friendCount} · Top 5: ${(a.topFriends || []).map((t) => '#' + t.rank).join(', ') || '—'}</p>
-    <p>🎵 ${esc(a.song_title || 'No song yet')} — ${esc(a.song_artist || '')} ${a.song_url ? `<a href="${esc(a.song_url)}" target="_blank" rel="noopener">Listen</a>` : ''}</p>
+    <p>🎵 ${esc(a.song_title || 'No song yet')} — ${esc(a.song_artist || '')} ${a.song_url ? `<br><audio controls preload="none" src="${esc(a.song_url)}" style="width:100%;max-width:320px"></audio>` : ''}</p>
     ${editHtml}
     <div class="chatbox"><b>🤖 ${esc(a.name)}'s AI Companion</b><p>${esc(a.bot_greeting || 'I am your AI companion, chat with me about anything')}</p>
     <input id="chatMsg" placeholder="Ask about their life story…"><button onclick="chat(${a.id})">Send</button> <button onclick="voiceChat(${a.id})">🎤 Voice call</button><div id="chatOut"></div></div>
@@ -176,6 +181,36 @@ async function addCustomSkin(id) {
   const imageUrl = found ? found[0] : raw.trim();
   if (!imageUrl) { alert('Paste an image link or a profile layout code with an image in it.'); return; }
   try { const s = await api(`/api/authors/${id}/custom-skins`, { method: 'POST', body: JSON.stringify({ name: 'Custom skin', image_url: imageUrl }) }); await api(`/api/authors/${id}/style`, { method: 'POST', body: JSON.stringify({ custom_skin_url: s.image_url, custom_skin_name: s.name }) }); alert('Custom skin imported and applied.'); loadAuthors(); openProfile(id); } catch (e) { alert(e.message); } }
+let songResults = [];
+async function searchSongs(id) {
+  const q = ($('songSearch').value || '').trim();
+  if (!q) { $('songResults').innerHTML = '<p>Type a song or artist to search.</p>'; return; }
+  $('songResults').innerHTML = '<p>Searching…</p>';
+  try {
+    const r = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=song&limit=8`);
+    const j = await r.json();
+    songResults = j.results || [];
+    $('songResults').innerHTML = songResults.length ? songResults.map((s, i) => `<div class="card"><b>${esc(s.trackName)}</b> — ${esc(s.artistName)}<br><audio controls preload="none" src="${esc(s.previewUrl)}" style="width:100%;max-width:320px"></audio><br><button onclick="pickSong(${id}, ${i})">Use this song</button></div>`).join('') : '<p>No songs found. Try a different search.</p>';
+  } catch (e) { $('songResults').innerHTML = '<p>Song search failed. Check your connection and try again.</p>'; }
+}
+async function pickSong(id, i) {
+  const s = songResults[i]; if (!s) return;
+  try { await api(`/api/authors/${id}/style`, { method: 'POST', body: JSON.stringify({ song_title: s.trackName, song_artist: s.artistName, song_url: s.previewUrl }) }); openProfile(id); }
+  catch (e) { $('songMsg').textContent = e.message; }
+}
+async function uploadSong(id) {
+  const f = $('songFile').files && $('songFile').files[0];
+  if (!f) { $('songMsg').textContent = 'Choose an audio file first.'; return; }
+  if (f.size > 15 * 1024 * 1024) { $('songMsg').textContent = 'That file is over 15 MB. Pick a smaller file.'; return; }
+  $('songMsg').textContent = 'Uploading…';
+  try {
+    const r = await fetch(`/api/authors/${id}/song-upload?title=${encodeURIComponent(f.name.replace(/\.[^.]+$/, ''))}`, { method: 'POST', headers: { 'Content-Type': f.type || 'audio/mpeg' }, body: f });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Upload failed.');
+    await api(`/api/authors/${id}/style`, { method: 'POST', body: JSON.stringify({ song_title: d.title, song_artist: '', song_url: d.url }) });
+    openProfile(id);
+  } catch (e) { $('songMsg').textContent = e.message; }
+}
 async function chat(id) { const m = $('chatMsg').value; const d = await api(`/api/companion/${id}/chat`, { method: 'POST', body: JSON.stringify({ message: m, adult }) }); $('chatOut').innerHTML += `<p><b>You:</b> ${esc(m)}</p><p><b>AI:</b> ${esc(d.reply)}</p>`; }
 let voiceState = null;
 function speakReply(text) {
