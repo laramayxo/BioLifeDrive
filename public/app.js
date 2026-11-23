@@ -394,6 +394,26 @@ async function getCloudConfig() {
   try { cloudCfg = await (await fetch('/api/config')).json(); } catch (e) { cloudCfg = {}; }
   return cloudCfg;
 }
+// Shrink pictures before upload so storage lasts much longer for everyone:
+// a phone photo can be 3 MB, but a profile/story picture only needs to be
+// about 1200px wide — shrinking it to ~200-400 KB means roughly 10x as many
+// pictures fit in the same storage. Falls back to the original file if the
+// browser cannot shrink it (for example iPhone HEIC photos).
+async function prepareImage(file) {
+  if (!file.type || !file.type.startsWith('image/') || file.type === 'image/gif') return file;
+  try {
+    const bmp = await createImageBitmap(file);
+    const maxDim = 1200;
+    const scale = Math.min(1, maxDim / Math.max(bmp.width, bmp.height));
+    if (scale === 1 && file.size <= 500 * 1024) return file;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bmp.width * scale); canvas.height = Math.round(bmp.height * scale);
+    canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', 0.82));
+    if (!blob) return file;
+    return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' });
+  } catch (e) { return file; }
+}
 async function cloudinaryUpload(file) {
   const cfg = await getCloudConfig();
   if (!cfg.cloudinaryCloud || !cfg.cloudinaryPreset) return null;
@@ -415,6 +435,7 @@ async function cloudinaryVideoUpload(file) {
   return d.secure_url;
 }
 async function uploadStoryPicture(storyId, file) {
+  file = await prepareImage(file);
   const url = await cloudinaryUpload(file);
   if (url) { await api(`/api/stories/${storyId}`, { method: 'PATCH', body: JSON.stringify({ image_url: url }) }); return; }
   const r = await fetch(`/api/stories/${storyId}/image-upload`, { method: 'POST', headers: { 'Content-Type': file.type || 'image/jpeg' }, body: file });
@@ -422,11 +443,12 @@ async function uploadStoryPicture(storyId, file) {
   if (!r.ok) throw new Error(d.error || 'Picture upload failed.');
 }
 async function uploadAvatar(id) {
-  const f = $('avatarFile').files && $('avatarFile').files[0];
+  let f = $('avatarFile').files && $('avatarFile').files[0];
   if (!f) { $('avatarMsg').textContent = 'Choose a picture first.'; return; }
   if (f.size > 5 * 1024 * 1024) { $('avatarMsg').textContent = 'That picture is over 5 MB. Pick a smaller one.'; return; }
   $('avatarMsg').textContent = 'Uploading…';
   try {
+    f = await prepareImage(f);
     let url = await cloudinaryUpload(f);
     if (!url) {
       const r = await fetch(`/api/authors/${id}/avatar-upload`, { method: 'POST', headers: { 'Content-Type': f.type || 'image/jpeg' }, body: f });
