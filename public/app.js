@@ -275,9 +275,9 @@ async function refreshCreateProfile() {
   }
   const locked = !!mine;
   $('profileName').disabled = locked; $('profileBio').disabled = locked; $('createProfileBtn').disabled = locked;
-  $('profileMsg').innerHTML = locked
-    ? `You already have a profile — one profile per person. <button onclick="openProfile(${mine})">Open my profile</button>`
-    : '';
+  // No "Open my profile" button here — the "My Profile" button at the top
+  // right already takes you straight to your profile.
+  $('profileMsg').textContent = locked ? 'You already have a profile — one profile per person.' : '';
 }
 $('createProfileBtn').onclick = async () => {
   if (!currentUser) { $('profileMsg').textContent = 'Sign in first — create an account with your email and password.'; showAuth('signup'); return; }
