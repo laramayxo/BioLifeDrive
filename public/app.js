@@ -163,12 +163,8 @@ async function openProfile(id) {
     <p>${esc(a.song_artist || '')}</p>
     ${songPlayer}
     ${isMine ? `
-    <p>Search for a song: <input id="songSearch" placeholder="Song or artist…"> <button onclick="searchSongs(${a.id})">Search</button></p>
-    <div id="songResults"></div>
-    <p>Add a free song from YouTube: <input id="songLink" placeholder="Paste a YouTube link…"> <button onclick="addSongFromLink(${a.id})">Add song</button></p>
-    <p id="songLinkMsg"></p>
-    <p>Or upload your own song file (MP3/M4A/WAV, up to 15 MB — only upload a song you own or have permission to share): <input type="file" id="songFile" accept="audio/*"> <button onclick="uploadSong(${a.id})">Upload song</button></p>
-    <p id="songMsg"></p>` : ''}
+    <p>Add a song from YouTube: <input id="songLink" placeholder="Paste a YouTube link…"> <button onclick="addSongFromLink(${a.id})">Add song</button></p>
+    <p id="songLinkMsg"></p>` : ''}
     </div>`;
   const editHtml = isMine ? `
     <p>Custom skin — paste a direct image link, or a whole profile layout code: <input id="csUrl" placeholder="Paste image link or layout code…"> <button onclick="addCustomSkin(${a.id})">Import skin</button></p>
