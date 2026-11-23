@@ -318,11 +318,12 @@ async function openProfile(id) {
     ? `<img class="profile-pic" src="${esc(a.avatar_url)}" alt="${esc(a.name)}">`
     : `<div class="profile-pic profile-pic-empty">${esc((a.name || '?')[0])}</div>`;
   const ytId = youtubeId(a.song_url || '');
-  const songPlayer = a.song_url ? (ytId ? `<iframe width="100%" height="160" src="https://www.youtube.com/embed/${ytId}?autoplay=1&mute=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>` : `<audio controls autoplay muted preload="none" src="${esc(a.song_url)}" style="width:100%"></audio>`) : '';
+  const songPlayer = a.song_url ? (ytId ? `<iframe id="songPlayerFrame" width="100%" height="160" src="https://www.youtube.com/embed/${ytId}?autoplay=1&mute=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>` : `<audio id="songPlayerAudio" controls autoplay muted preload="none" src="${esc(a.song_url)}" style="width:100%"></audio>`) : '';
   const musicHtml = `
     <div class="music-box"><h4>🎵 ${esc(a.song_title || 'No song yet')}</h4>
     <p>${esc(a.song_artist || '')}</p>
     ${songPlayer}
+    ${a.song_url ? `<p><button onclick="unmuteSong()">🔊 Turn sound on</button></p>` : ''}
     ${isMine ? `
     <p>Add a song from YouTube: <input id="songLink" placeholder="Paste a YouTube link…"> <button onclick="addSongFromLink(${a.id})">Add song</button></p>
     <p id="songLinkMsg"></p>` : ''}
@@ -408,6 +409,16 @@ async function addCustomSkin(id) {
 }
 let songResults = [];
 function youtubeId(url) { const m = String(url || '').match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/); return m ? m[1] : null; }
+// Browsers block autoplay WITH sound — a video may only start playing on
+// its own if it is muted. Tapping is a real user gesture, so the Sound on
+// button can restart the song with sound: for YouTube it reloads the player
+// without the mute flag, for an audio file it just unmutes it.
+function unmuteSong() {
+  const frame = $('songPlayerFrame');
+  if (frame) { frame.src = frame.src.replace('autoplay=1&mute=1', 'autoplay=1').replace('mute=1&', ''); return; }
+  const audio = $('songPlayerAudio');
+  if (audio) { audio.muted = false; audio.volume = 1; audio.play(); }
+}
 async function addSongFromLink(id) {
   const url = ($('songLink').value || '').trim();
   const vid = youtubeId(url);
