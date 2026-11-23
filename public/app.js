@@ -267,7 +267,7 @@ function claimProfile(id) { try { localStorage.setItem('myProfileId', String(id)
 async function loadAuthors() {
   skins = await api('/api/skins');
   const list = await api('/api/authors');
-  $('authors').innerHTML = list.map((a) => `<div class="card" style="${a.custom_skin_url ? `background-image:url('${esc(a.custom_skin_url)}');background-size:cover;background-position:center;` : `background:${(skins[a.skin] || {}).bg || '#fff'}`}"><b>${esc(a.name)}</b> — ${esc(a.bio || '')}<br>Song: ${esc(a.song_title || '—')} ${esc(a.song_artist || '')}<br><button onclick="openProfile(${a.id})">Open profile</button> <button onclick="addFriend(${a.id})">Add Friend</button> <button onclick="follow(${a.id})">Follow</button></div>`).join('') || '<p>No profiles yet.</p>';
+  $('authors').innerHTML = list.map((a) => `<div class="card" style="${a.custom_skin_url ? `background-image:url('${esc(a.custom_skin_url)}');background-size:cover;background-position:center;` : `background:${a.custom_bg_color || (skins[a.skin] || {}).bg || '#fff'}`}"><b>${esc(a.name)}</b> — ${esc(a.bio || '')}<br>Song: ${esc(a.song_title || '—')} ${esc(a.song_artist || '')}<br><button onclick="openProfile(${a.id})">Open profile</button> <button onclick="addFriend(${a.id})">Add Friend</button> <button onclick="follow(${a.id})">Follow</button></div>`).join('') || '<p>No profiles yet.</p>';
   const eps = await api('/api/episodes');
   $('episodes').innerHTML = eps.map((e) => `<div class="card"><b>${esc(e.title)}</b> — ${e.duration_minutes} min · ${e.views} views<br><a href="${esc(e.youtube_url)}" target="_blank" rel="noopener">Watch on YouTube</a> <button onclick="viewEp(${e.id})">Mark viewed</button></div>`).join('') || '<p>No episodes yet.</p>';
 }
@@ -323,7 +323,7 @@ async function openProfile(id) {
     <h4>Pick your Top 5</h4>
     ${[1, 2, 3, 4, 5].map((rank) => `<p>#${rank} <select id="top5-${rank}" onchange="setTopFive(${a.id}, ${rank}, this.value)"><option value="">— none —</option>${(a.friends || []).map((f) => `<option value="${f.id}" ${(topSlots[rank - 1] && String(topSlots[rank - 1].id) === String(f.id)) ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select></p>`).join('')}`
     : `<p><button onclick="claimProfile(${a.id})">This is my profile</button></p>`;
-  $('profileDetail').innerHTML = `<div class="card" style="${a.custom_skin_url ? `background-image:url('${esc(a.custom_skin_url)}');background-size:cover;background-position:center;` : `background:${skin.bg || '#fff'}`}">
+  $('profileDetail').innerHTML = `<div class="card" style="${a.custom_skin_url ? `background-image:url('${esc(a.custom_skin_url)}');background-size:cover;background-position:center;` : `background:${a.custom_bg_color || skin.bg || '#fff'}`}">
     <div class="profile-layout">
       <div class="profile-left">
         ${picHtml}
@@ -377,12 +377,28 @@ async function publishProfileStory(id) {
 async function setSkin(id, skin) { await api(`/api/authors/${id}/style`, { method: 'POST', body: JSON.stringify({ skin }) }); loadAuthors(); openProfile(id); }
 async function addCustomSkin(id) {
   // Easy for users: paste a direct image link, OR paste a whole profile layout
-  // layout code block — we pull the background image URL out of it.
+  // code block — we pull the background image URL out of it. Some layouts
+  // have no picture at all, only a background color (like the one Lara
+  // pasted on 2026-11-23, which is just pink FFF0F5) — then we apply that
+  // background color instead of failing.
   const raw = $('csUrl').value || '';
   const found = raw.match(/https?:\/\/[^\s"'\)]+\.(?:jpg|jpeg|png|gif|webp)(?:\?[^\s"'\)]*)?/i);
-  const imageUrl = found ? found[0] : raw.trim();
-  if (!imageUrl) { alert('Paste an image link or a profile layout code with an image in it.'); return; }
-  try { const s = await api(`/api/authors/${id}/custom-skins`, { method: 'POST', body: JSON.stringify({ name: 'Custom skin', image_url: imageUrl }) }); await api(`/api/authors/${id}/style`, { method: 'POST', body: JSON.stringify({ custom_skin_url: s.image_url, custom_skin_name: s.name }) }); alert('Custom skin imported and applied.'); loadAuthors(); openProfile(id); } catch (e) { alert(e.message); } }
+  if (found) {
+    try { const s = await api(`/api/authors/${id}/custom-skins`, { method: 'POST', body: JSON.stringify({ name: 'Custom skin', image_url: found[0] }) }); await api(`/api/authors/${id}/style`, { method: 'POST', body: JSON.stringify({ custom_skin_url: s.image_url, custom_skin_name: s.name, custom_bg_color: '' }) }); alert('Custom skin imported and applied.'); loadAuthors(); openProfile(id); } catch (e) { alert(e.message); }
+    return;
+  }
+  const color = raw.match(/background-color\s*:\s*#?([0-9a-f]{3,6})\b/i);
+  if (color) {
+    try { await api(`/api/authors/${id}/style`, { method: 'POST', body: JSON.stringify({ custom_bg_color: '#' + color[1], custom_skin_url: '' }) }); alert('Background color applied to your profile.'); loadAuthors(); openProfile(id); } catch (e) { alert(e.message); }
+    return;
+  }
+  const imageUrl = raw.trim();
+  if (imageUrl) {
+    try { const s = await api(`/api/authors/${id}/custom-skins`, { method: 'POST', body: JSON.stringify({ name: 'Custom skin', image_url: imageUrl }) }); await api(`/api/authors/${id}/style`, { method: 'POST', body: JSON.stringify({ custom_skin_url: s.image_url, custom_skin_name: s.name, custom_bg_color: '' }) }); alert('Custom skin imported and applied.'); loadAuthors(); openProfile(id); } catch (e) { alert(e.message); }
+    return;
+  }
+  alert('Paste an image link, or a profile layout code with a background image or background color in it.');
+}
 let songResults = [];
 function youtubeId(url) { const m = String(url || '').match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/); return m ? m[1] : null; }
 async function addSongFromLink(id) {

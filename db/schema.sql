@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   expires_at TIMESTAMPTZ NOT NULL
 );
 ALTER TABLE authors ADD COLUMN IF NOT EXISTS user_id INT REFERENCES users(id);
+ALTER TABLE authors ADD COLUMN IF NOT EXISTS custom_bg_color TEXT;
 ALTER TABLE authors ALTER COLUMN bot_greeting SET DEFAULT 'I am your AI companion, where you can have an intelligent conversation with me.';
 
 CREATE TABLE IF NOT EXISTS authors (
@@ -27,6 +28,7 @@ CREATE TABLE IF NOT EXISTS authors (
   avatar_url TEXT,
   custom_skin_url TEXT,
   custom_skin_name TEXT,
+  custom_bg_color TEXT,
   song_title TEXT,
   song_artist TEXT,
   song_url TEXT,
