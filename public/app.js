@@ -11,6 +11,7 @@ document.querySelectorAll('[data-nav]').forEach((b) => b.onclick = () => {
   document.querySelectorAll('.view').forEach((v) => v.classList.add('hidden'));
   $('view-' + b.dataset.nav).classList.remove('hidden');
   if (b.dataset.nav === 'record-video') loadVideos();
+  if (b.dataset.nav === 'create-profile') refreshCreateProfile();
 });
 
 // ---------- Record Video: in-browser camera + mic ----------
@@ -102,10 +103,25 @@ $('publishBtn').onclick = async () => {
   try { const s = await api('/api/stories', { method: 'POST', body: JSON.stringify({ author_id: Number($('newAuthor').value) || 1, title: $('newTitle').value, body: $('newBody').value, category: $('category').value || 'Life story' }) }); $('publishMsg').textContent = s.audience === 'adult' ? 'Published as 18+ adults-only.' : 'Published!'; loadStories(); }
   catch (e) { $('publishMsg').textContent = e.message; }
 };
+// One profile per person: once a profile has been created in this browser,
+// the Create Profile form is locked and the button will not create another.
+// (Without login yet, this is enforced per browser/device — someone using a
+// different device or clearing their browser data could still create one.
+// Real one-per-account enforcement needs login.)
+function refreshCreateProfile() {
+  const mine = myProfileId();
+  const locked = !!mine;
+  $('profileName').disabled = locked; $('profileBio').disabled = locked; $('createProfileBtn').disabled = locked;
+  $('profileMsg').innerHTML = locked
+    ? `You already have a profile — one profile per person. <button onclick="openProfile(${mine})">Open my profile</button>`
+    : '';
+}
 $('createProfileBtn').onclick = async () => {
-  try { const a = await api('/api/authors', { method: 'POST', body: JSON.stringify({ name: $('profileName').value, bio: $('profileBio').value }) }); me = a; try { localStorage.setItem('myProfileId', String(a.id)); } catch {} $('profileMsg').textContent = `Profile created — ID ${a.id}. Use this ID to publish stories.`; loadAuthors(); }
+  if (myProfileId()) { refreshCreateProfile(); return; }
+  try { const a = await api('/api/authors', { method: 'POST', body: JSON.stringify({ name: $('profileName').value, bio: $('profileBio').value }) }); me = a; try { localStorage.setItem('myProfileId', String(a.id)); } catch {} $('profileMsg').textContent = `Profile created — ID ${a.id}. Use this ID to publish stories.`; refreshCreateProfile(); loadAuthors(); }
   catch (e) { $('profileMsg').textContent = e.message; }
 };
+refreshCreateProfile();
 function myProfileId() { try { return localStorage.getItem('myProfileId') || (me ? String(me.id) : null); } catch { return me ? String(me.id) : null; } }
 function claimProfile(id) { try { localStorage.setItem('myProfileId', String(id)); } catch {} me = { id }; openProfile(id); }
 
