@@ -20,8 +20,17 @@ function goHome() {
 function refreshAuthArea() {
   const el = $('authArea'); if (!el) return;
   el.innerHTML = currentUser
-    ? `<span>${esc(currentUser.email)}</span><button onclick="topCreateProfile()">Create Profile</button><button onclick="signOut()">Sign out</button>`
+    ? `<span>${esc(currentUser.email)}</span><button onclick="goToMyProfile()">My Profile</button><button onclick="signOut()">Sign out</button>`
     : `<button onclick="showAuth('signup')">Create Profile</button><button onclick="showAuth('signin')">Sign in</button>`;
+}
+async function goToMyProfile() {
+  if (!currentUser) { showAuth('signin'); return; }
+  let pid = myProfileId();
+  if (!pid) {
+    try { const me = await api('/api/auth/me'); if (me.profile) { pid = me.profile.id; try { localStorage.setItem('myProfileId', String(pid)); } catch {} } } catch {}
+  }
+  if (pid) openProfile(Number(pid));
+  else topCreateProfile();
 }
 function topCreateProfile() {
   if (!currentUser) { showAuth('signup'); return; }
