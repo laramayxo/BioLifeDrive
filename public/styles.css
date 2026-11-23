@@ -88,6 +88,19 @@ nav button.active { background: #fff; color: var(--blue); }
   color: var(--muted);
   font-size: 13px;
 }
+/* Ad slots — clean and quiet: a white card like everything else, with a
+   small "Advertisement" label. No pop-ups, no ads covering content, no
+   flashing. Real AdSense ads fill these once Google approves the site. */
+.ad-slot {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin: 12px 0;
+  padding: 8px 12px;
+  text-align: center;
+}
+.ad-slot .ad-label { font-size: 10px; letter-spacing: .8px; text-transform: uppercase; color: #bcc0c4; }
+.ad-slot .ad-body { min-height: 90px; display: flex; align-items: center; justify-content: center; color: #bcc0c4; font-size: 13px; }
 main { max-width: 680px; margin: 0 auto; padding: 16px 12px 32px; }
 .view.hidden { display: none; }
 h2 { font-size: 20px; margin: 4px 0 10px; letter-spacing: -.3px; }

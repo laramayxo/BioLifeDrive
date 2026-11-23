@@ -159,10 +159,16 @@ async function viewVideo(id) { await api(`/api/videos/${id}/view`, { method: 'PO
 $('adultMode').onchange = (e) => { adult = e.target.checked; $('modeNote').textContent = adult ? 'Adult mode on — 18+ content visible' : 'Minor-safe browsing on'; loadStories(); loadAuthors(); loadVideos(); };
 document.querySelectorAll('[data-legal]').forEach((b) => b.onclick = async () => { const d = await api('/api/legal/' + b.dataset.legal); $('legalOut').textContent = d.text; });
 
+// Clean ad slots: a white card with a small "Advertisement" label, the same
+// look as everything else. One at the top of the home page, one in the feed
+// after every 3 stories, one after a story when you are reading it, and one
+// at the bottom of a profile page. Real AdSense ads fill these once Google
+// approves biolifedrive.com — no pop-ups, nothing covering the content.
+function adSlotHtml() { return `<div class="ad-slot"><div class="ad-label">Advertisement</div><div class="ad-body">Ads will show here once AdSense approves biolifedrive.com</div></div>`; }
 async function loadStories() {
   const q = $('search').value, cat = $('category').value;
   const list = await api(`/api/stories?adult=${adult ? 1 : 0}&q=${encodeURIComponent(q)}&category=${encodeURIComponent(cat)}`);
-  $('stories').innerHTML = list.map((s) => `<div class="card" onclick="openStory(${s.id})" style="cursor:pointer">${s.image_url ? `<img src="${esc(s.image_url)}" alt="" style="width:100%;border-radius:8px">` : ''}<h3>${esc(s.title)}</h3><p>${esc(s.body.slice(0, 300))}</p><p>👁 ${s.reads} · ❤️ ${s.likes} · ${esc(s.category)} ${s.audience === 'adult' ? '· 18+' : ''}</p><button onclick="event.stopPropagation();openStory(${s.id})">Read</button> <button onclick="event.stopPropagation();likeStory(${s.id})">Like</button> <button onclick="event.stopPropagation();shareStory(${s.id},'${esc(s.title).replace(/'/g, '')}')">Share</button> <button onclick="event.stopPropagation();report('story',${s.id})">🚩 Report</button></div>`).join('') || '<p>No stories yet — publish the first one.</p>';
+  $('stories').innerHTML = list.map((s, i) => `<div class="card" onclick="openStory(${s.id})" style="cursor:pointer">${s.image_url ? `<img src="${esc(s.image_url)}" alt="" style="width:100%;border-radius:8px">` : ''}<h3>${esc(s.title)}</h3><p>${esc(s.body.slice(0, 300))}</p><p>👁 ${s.reads} · ❤️ ${s.likes} · ${esc(s.category)} ${s.audience === 'adult' ? '· 18+' : ''}</p><button onclick="event.stopPropagation();openStory(${s.id})">Read</button> <button onclick="event.stopPropagation();likeStory(${s.id})">Like</button> <button onclick="event.stopPropagation();shareStory(${s.id},'${esc(s.title).replace(/'/g, '')}')">Share</button> <button onclick="event.stopPropagation();report('story',${s.id})">🚩 Report</button></div>${(i + 1) % 3 === 0 ? adSlotHtml() : ''}`).join('') || '<p>No stories yet — publish the first one.</p>';
 }
 async function shareStory(id, title) {
   const url = location.origin + '/#story-' + id;
@@ -183,6 +189,7 @@ async function openStory(id) {
     ${s.image_url ? `<img src="${esc(s.image_url)}" alt="" style="width:100%;border-radius:8px">` : ''}
     <h3>${esc(s.title)}</h3><p>${esc(s.body)}</p>
     <p>👁 ${s.reads} · ❤️ ${s.likes} · ${esc(s.category)} ${s.audience === 'adult' ? '· 18+' : ''}</p>
+    ${adSlotHtml()}
     <button onclick="likeStory(${s.id})">❤️ Like</button> <button onclick="shareStory(${s.id},'${esc(s.title).replace(/'/g, '')}')">Share</button> <button onclick="report('story',${s.id})">🚩 Report</button>
     ${isOwner ? `<button onclick="editStory(${s.id})">✏️ Edit</button> <button onclick="deleteStory(${s.id})">🗑️ Delete</button>` : ''}
     <p id="storyMsg"></p>
@@ -364,6 +371,7 @@ async function openProfile(id) {
       ${isMine ? `<h4>Publish on your page</h4>
       <input id="pfTitle" placeholder="Story title"><textarea id="pfBody" placeholder="Write your story…"></textarea><p>Add a picture (shown above the title): <input type="file" id="pfImage" accept="image/*"></p><button onclick="publishProfileStory(${a.id})">Publish story</button><p id="pfMsg"></p>
       <p><button onclick="document.querySelector('[data-nav=record-video]').click()">🎥 Record a video for your page</button></p>` : ''}
+      ${adSlotHtml()}
     </div></div>`;
   $('profileDetail').scrollIntoView();
   const vids = await api(`/api/videos?adult=${adult ? 1 : 0}`);
