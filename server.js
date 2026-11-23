@@ -300,8 +300,14 @@ app.get('/api/stories/:id', async (req, res) => {
   const s = await getStory(req.params.id); if (!s) return res.status(404).json({ error: 'not found' });
   if (s.audience === 'adult' && req.query.adult !== '1') return res.status(403).json({ error: '18+ only' });
   // Fair read counts: the author viewing their own story does not add a
-  // view. The viewer id comes from the browser's own-profile marker.
-  const counted = Number(req.query.viewer) !== s.author_id;
+  // view. The viewer id comes from the browser's own-profile marker, and
+  // a signed-in author is recognised by their account too — so it still
+  // works on a different device or browser where the marker isn't saved.
+  let counted = Number(req.query.viewer) !== s.author_id;
+  if (counted) {
+    const u = await authUser(req);
+    if (u) { const author = useDb ? (await q('SELECT user_id FROM authors WHERE id=$1', [s.author_id])).rows[0] : mem.authors.find((a) => a.id === s.author_id); if (author && author.user_id && String(author.user_id) === String(u.id)) counted = false; }
+  }
   if (counted) { if (useDb) await q('UPDATE stories SET reads=reads+1 WHERE id=$1', [s.id]); else s.reads++; }
   const comments = useDb ? (await q('SELECT * FROM comments WHERE story_id=$1 ORDER BY id', [s.id])).rows : mem.comments.filter((c) => c.story_id === s.id);
   const author = useDb ? (await q('SELECT user_id FROM authors WHERE id=$1', [s.author_id])).rows[0] : mem.authors.find((a) => a.id === s.author_id);
