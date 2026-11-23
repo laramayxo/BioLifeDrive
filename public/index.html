@@ -26,6 +26,7 @@
     <button data-nav="earnings">Earnings</button>
     <button data-nav="safety">🛡️ Safety</button>
     <button data-nav="legal">Legal</button>
+    <button data-nav="advertise">Advertise</button>
   </nav>
   <div class="mode">
     <label><input type="checkbox" id="adultMode"> 18+ Adult mode</label>
@@ -54,6 +55,7 @@
 
 <main>
   <section id="view-discover" class="view">
+    <div class="sponsor-slot"><div class="ad-label">Sponsored</div><div class="ad-body">Your business here — <a href="#" onclick="document.querySelector('[data-nav=advertise]').click();return false;">Advertise on BioLifeDrive</a></div></div>
     <h2>Discover stories</h2>
     <input id="search" placeholder="Search stories…">
     <select id="category"><option value="">All categories</option><option>Life story</option><option>Family</option><option>Travel</option><option>Career</option></select>
@@ -127,6 +129,15 @@
     <input id="reportReason" placeholder="Reason">
     <button id="reportBtn">🚩 Report</button><p id="reportMsg"></p>
     <div id="reports"></div>
+  </section>
+
+  <section id="view-advertise" class="view hidden">
+    <h2>Advertise on BioLifeDrive</h2>
+    <p>Put your business in front of people sharing and reading life stories. Your ad is a flat monthly fee — no confusing per-click billing.</p>
+    <div class="card"><h3>Sponsored banner — $50/month</h3><p>Your banner at the top of the home page, seen by everyone who visits. Link goes straight to your website.</p></div>
+    <div class="card"><h3>Sponsored story spot — $25/month</h3><p>Your business featured in the story feed, between stories.</p></div>
+    <p>Ads are clearly marked "Sponsored" so readers always know what is an ad. We do not sell pop-ups or ads that cover the story.</p>
+    <p>To book a spot, send a message to BioLifeDrive and say which spot you want — tell us your business name, your website link, and a picture or logo for your banner, and we will put it up for you.</p>
   </section>
 
   <section id="view-legal" class="view hidden">

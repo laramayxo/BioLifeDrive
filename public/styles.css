@@ -101,6 +101,11 @@ nav button.active { background: #fff; color: var(--blue); }
 }
 .ad-slot .ad-label { font-size: 10px; letter-spacing: .8px; text-transform: uppercase; color: #bcc0c4; }
 .ad-slot .ad-body { min-height: 90px; display: flex; align-items: center; justify-content: center; color: #bcc0c4; font-size: 13px; }
+/* Sponsored slot — a business that pays a flat monthly fee to be here.
+   Gold edge so it stands apart from the regular AdSense slots. */
+.sponsor-slot { background: #fff8e6; border: 1px solid #e6c87a; border-radius: var(--radius); margin: 12px 0; padding: 8px 12px; text-align: center; }
+.sponsor-slot .ad-label { font-size: 10px; letter-spacing: .8px; text-transform: uppercase; color: #a67c00; }
+.sponsor-slot .ad-body { min-height: 60px; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 14px; }
 main { max-width: 680px; margin: 0 auto; padding: 16px 12px 32px; }
 .view.hidden { display: none; }
 h2 { font-size: 20px; margin: 4px 0 10px; letter-spacing: -.3px; }
