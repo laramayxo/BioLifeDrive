@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS authors (
   song_artist TEXT,
   song_url TEXT,
   bot_enabled BOOLEAN DEFAULT TRUE,
-  bot_greeting TEXT DEFAULT 'Hi, I am this creator''s AI companion. Ask me about their life story.',
+  bot_greeting TEXT DEFAULT 'I am your AI companion, chat with me about anything',
   bot_personality TEXT DEFAULT 'Warm, curious, and encouraging',
   bot_topics TEXT DEFAULT '',
   bot_tone TEXT DEFAULT 'Friendly',

@@ -121,7 +121,7 @@ async function createAuthor({ name, bio }) {
   const status = moderate(`${name} ${bio}`);
   if (status === 'blocked') throw new Error('Profile blocked by moderation');
   if (useDb) return (await q('INSERT INTO authors(name,bio) VALUES($1,$2) RETURNING *', [name, bio || ''])).rows[0];
-  const a = { id: mem.seq.authors++, name, bio: bio || '', skin: 'classic-blue', custom_skin_url: null, custom_skin_name: null, song_title: '', song_artist: '', song_url: '', bot_enabled: true, bot_greeting: 'Hi, I am this creator\'s AI companion. Ask me about their life story.', bot_personality: 'Warm, curious, and encouraging', bot_topics: '', bot_tone: 'Friendly', total_reads: 0, created_at: new Date().toISOString() };
+  const a = { id: mem.seq.authors++, name, bio: bio || '', skin: 'classic-blue', custom_skin_url: null, custom_skin_name: null, song_title: '', song_artist: '', song_url: '', bot_enabled: true, bot_greeting: 'I am your AI companion, chat with me about anything', bot_personality: 'Warm, curious, and encouraging', bot_topics: '', bot_tone: 'Friendly', total_reads: 0, created_at: new Date().toISOString() };
   mem.authors.push(a); return a;
 }
 async function listStories(adultMode) {
@@ -328,7 +328,7 @@ app.post('/api/companion/:authorId/chat', async (req, res) => {
   const hiddenCount = stories.length - visibleStories.length;
   const msg = String(req.body.message || '');
   let reply;
-  if (/who are you|are you (the )?(real|person)/i.test(msg)) reply = `I am ${a.name}'s AI companion on BioLifeDrive. I am an AI, not ${a.name}. I can talk about their published life stories.`;
+  if (/who are you|are you (the )?(real|person)/i.test(msg)) reply = `I am your AI companion, chat with me about anything. I am an AI, not ${a.name}.`;
   else if (/how many|stories/i.test(msg)) reply = `${a.name} has published ${stories.length} ${stories.length === 1 ? 'story' : 'stories'}${hiddenCount ? ` (${hiddenCount} hidden in minor-safe mode because it is 18+).` : '.'} ${visibleStories.map((s) => `"${s.title}"`).join(', ') || 'No stories are visible in this mode.'}`;
   else if (visibleStories.length) { const s = visibleStories.find((x) => msg.toLowerCase().split(/\W+/).some((w) => w.length > 3 && x.title.toLowerCase().includes(w))) || visibleStories[0]; reply = `In "${s.title}", ${a.name} writes: ${s.body.slice(0, 280)}${s.body.length > 280 ? '…' : ''} Want to hear more about that story?`; }
   else reply = `${a.bot_greeting} ${a.name} has no stories visible in this mode yet. Ask me about their bio: ${a.bio || 'No bio yet.'}`;

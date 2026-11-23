@@ -151,7 +151,7 @@ async function openProfile(id) {
     <p>Friends: ${a.friendCount} · Top 5: ${(a.topFriends || []).map((t) => '#' + t.rank).join(', ') || '—'}</p>
     <p>🎵 ${esc(a.song_title || 'No song yet')} — ${esc(a.song_artist || '')} ${a.song_url ? `<a href="${esc(a.song_url)}" target="_blank" rel="noopener">Listen</a>` : ''}</p>
     ${editHtml}
-    <div class="chatbox"><b>🤖 ${esc(a.name)}'s AI Companion</b><p>${esc(a.bot_greeting || '')} — I am an AI, not ${esc(a.name)}.</p>
+    <div class="chatbox"><b>🤖 ${esc(a.name)}'s AI Companion</b><p>${esc(a.bot_greeting || 'I am your AI companion, chat with me about anything')}</p>
     <input id="chatMsg" placeholder="Ask about their life story…"><button onclick="chat(${a.id})">Send</button> <button onclick="voiceChat(${a.id})">🎤 Voice call</button><div id="chatOut"></div></div>
     <h4>${esc(a.name)}'s stories</h4><div id="profileStories">${(a.stories || []).map((s) => `<div class="card"><b>${esc(s.title)}</b><p>${esc((s.body || '').slice(0, 200))}</p><button onclick="openStory(${s.id})">Read</button></div>`).join('') || '<p>No stories yet.</p>'}</div>
     <h4>${esc(a.name)}'s videos</h4><div id="profileVideos"><p>Loading videos…</p></div>
