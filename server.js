@@ -41,6 +41,7 @@
  */
 const express = require('express');
 const cors = require('cors');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
@@ -84,7 +85,7 @@ try {
   }
 } catch (e) { console.warn('pg unavailable, using memory store', e.message); }
 
-const mem = { authors: [], stories: [], comments: [], friendships: [], topFive: [], follows: [], episodes: [], videos: [], memberships: [], reports: [], blocks: [], botMessages: [], customSkins: [], seq: { authors: 1, stories: 1, comments: 1, episodes: 1, videos: 1, reports: 1, botMessages: 1, customSkins: 1 } };
+const mem = { authors: [], stories: [], comments: [], friendships: [], topFive: [], follows: [], episodes: [], videos: [], memberships: [], reports: [], blocks: [], botMessages: [], customSkins: [], users: [], sessions: [], seq: { authors: 1, stories: 1, comments: 1, episodes: 1, videos: 1, reports: 1, botMessages: 1, customSkins: 1, users: 1 } };
 const SKINS = {
   'classic-blue': { name: 'Classic Blue', bg: '#eaf4ff', accent: '#0091ff' },
   'classic-cream': { name: 'Classic Cream', bg: '#fff8e7', accent: '#0091ff' },
@@ -117,11 +118,15 @@ async function getAuthor(id) {
   if (useDb) return (await q('SELECT * FROM authors WHERE id=$1', [id])).rows[0] || null;
   return mem.authors.find((a) => a.id === Number(id)) || null;
 }
-async function createAuthor({ name, bio }) {
+async function createAuthor({ name, bio, userId }) {
   const status = moderate(`${name} ${bio}`);
   if (status === 'blocked') throw new Error('Profile blocked by moderation');
-  if (useDb) return (await q('INSERT INTO authors(name,bio) VALUES($1,$2) RETURNING *', [name, bio || ''])).rows[0];
-  const a = { id: mem.seq.authors++, name, bio: bio || '', skin: 'classic-blue', avatar_url: null, custom_skin_url: null, custom_skin_name: null, song_title: '', song_artist: '', song_url: '', bot_enabled: true, bot_greeting: 'I am your AI companion, chat with me about anything', bot_personality: 'Warm, curious, and encouraging', bot_topics: '', bot_tone: 'Friendly', total_reads: 0, created_at: new Date().toISOString() };
+  if (userId) {
+    const existing = useDb ? (await q('SELECT * FROM authors WHERE user_id=$1', [userId])).rows[0] : mem.authors.find((a) => a.user_id === userId);
+    if (existing) throw new Error('You already have a profile.');
+  }
+  if (useDb) return (await q('INSERT INTO authors(user_id,name,bio) VALUES($1,$2,$3) RETURNING *', [userId || null, name, bio || ''])).rows[0];
+  const a = { id: mem.seq.authors++, user_id: userId || null, name, bio: bio || '', skin: 'classic-blue', avatar_url: null, custom_skin_url: null, custom_skin_name: null, song_title: '', song_artist: '', song_url: '', bot_enabled: true, bot_greeting: 'I am your AI companion, chat with me about anything', bot_personality: 'Warm, curious, and encouraging', bot_topics: '', bot_tone: 'Friendly', total_reads: 0, created_at: new Date().toISOString() };
   mem.authors.push(a); return a;
 }
 async function listStories(adultMode) {
@@ -138,9 +143,78 @@ async function getStory(id) {
 app.get('/api/health', (req, res) => res.json({ ok: true, db: useDb ? 'postgres' : 'memory', skins: Object.keys(SKINS) }));
 app.get('/api/skins', (req, res) => res.json(SKINS));
 
+// ---------- Accounts: email + password ----------
+// Passwords are hashed with scrypt and a per-user salt; plain passwords
+// are never stored. Sessions are random tokens, valid for 30 days.
+function hashPassword(password, salt) { return crypto.scryptSync(password, salt, 64).toString('hex'); }
+async function findUserByEmail(email) {
+  const e = String(email || '').trim().toLowerCase();
+  if (useDb) return (await q('SELECT * FROM users WHERE email=$1', [e])).rows[0] || null;
+  return mem.users.find((u) => u.email === e) || null;
+}
+async function createSession(userId) {
+  const token = crypto.randomBytes(32).toString('hex');
+  const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  if (useDb) await q('INSERT INTO sessions(token,user_id,expires_at) VALUES($1,$2,$3)', [token, userId, expires]);
+  else mem.sessions.push({ token, user_id: userId, expires_at: expires.toISOString() });
+  return token;
+}
+async function userFromToken(token) {
+  if (!token) return null;
+  let s = null;
+  if (useDb) { const r = await q('SELECT * FROM sessions WHERE token=$1 AND expires_at > NOW()', [token]); s = r.rows[0]; }
+  else s = mem.sessions.find((x) => x.token === token && new Date(x.expires_at) > new Date());
+  if (!s) return null;
+  if (useDb) return (await q('SELECT id, email, display_name FROM users WHERE id=$1', [s.user_id])).rows[0] || null;
+  const u = mem.users.find((x) => x.id === s.user_id);
+  return u ? { id: u.id, email: u.email, display_name: u.display_name } : null;
+}
+async function authUser(req) {
+  const h = req.headers.authorization || '';
+  const token = h.startsWith('Bearer ') ? h.slice(7) : (req.headers['x-auth-token'] || '');
+  return userFromToken(token);
+}
+function publicUser(u) { return { id: u.id, email: u.email, display_name: u.display_name }; }
+app.post('/api/auth/signup', async (req, res) => {
+  try {
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const password = String(req.body.password || '');
+    const name = String(req.body.name || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
+    if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+    if (await findUserByEmail(email)) return res.status(400).json({ error: 'An account with that email already exists. Sign in instead.' });
+    const salt = crypto.randomBytes(16).toString('hex');
+    const password_hash = hashPassword(password, salt);
+    let user;
+    if (useDb) user = (await q('INSERT INTO users(email,password_hash,salt,display_name) VALUES($1,$2,$3,$4) RETURNING id,email,display_name', [email, password_hash, salt, name])).rows[0];
+    else { user = { id: mem.seq.users++, email, password_hash, salt, display_name: name, created_at: new Date().toISOString() }; mem.users.push(user); user = publicUser(user); }
+    const token = await createSession(user.id);
+    res.status(201).json({ token, user: publicUser(user) });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+app.post('/api/auth/signin', async (req, res) => {
+  const email = String(req.body.email || '').trim().toLowerCase();
+  const password = String(req.body.password || '');
+  const u = await findUserByEmail(email);
+  if (!u || hashPassword(password, u.salt) !== u.password_hash) return res.status(400).json({ error: 'Email or password is wrong.' });
+  const token = await createSession(u.id);
+  res.json({ token, user: publicUser(u) });
+});
+app.get('/api/auth/me', async (req, res) => {
+  const u = await authUser(req); if (!u) return res.status(401).json({ error: 'Not signed in.' });
+  const profile = useDb ? (await q('SELECT * FROM authors WHERE user_id=$1', [u.id])).rows[0] || null : mem.authors.find((a) => a.user_id === u.id) || null;
+  res.json({ user: u, profile });
+});
+app.post('/api/auth/signout', async (req, res) => {
+  const h = req.headers.authorization || '';
+  const token = h.startsWith('Bearer ') ? h.slice(7) : '';
+  if (token) { if (useDb) await q('DELETE FROM sessions WHERE token=$1', [token]); else mem.sessions = mem.sessions.filter((s) => s.token !== token); }
+  res.json({ ok: true });
+});
+
 app.get('/api/authors', async (req, res) => res.json(await listAuthors()));
 app.post('/api/authors', async (req, res) => {
-  try { res.status(201).json(await createAuthor(req.body)); } catch (e) { res.status(400).json({ error: e.message }); }
+  try { const u = await authUser(req); res.status(201).json(await createAuthor({ ...req.body, userId: u ? u.id : null })); } catch (e) { res.status(400).json({ error: e.message }); }
 });
 app.get('/api/authors/:id', async (req, res) => {
   const a = await getAuthor(req.params.id); if (!a) return res.status(404).json({ error: 'not found' });

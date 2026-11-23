@@ -36,7 +36,15 @@ header {
   top: 0;
   z-index: 10;
 }
-.logo { font-size: 22px; font-weight: 800; color: #fff; letter-spacing: -.3px; white-space: nowrap; }
+.logo { font-size: 22px; font-weight: 800; color: #fff; letter-spacing: -.3px; white-space: nowrap; cursor: pointer; }
+.auth-area { display: flex; gap: 6px; align-items: center; }
+.auth-area button { background: #fff; color: var(--blue); }
+.auth-area button:hover { background: #e7f0fe; }
+.auth-area span { font-size: 13px; color: #e7f0fe; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.auth-modal { position: fixed; inset: 0; background: rgba(0, 0, 0, .5); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 12px; }
+.auth-modal.hidden { display: none; }
+.auth-card { max-width: 400px; width: 100%; margin: 0; }
+.auth-card h3 { margin-top: 0; }
 nav { display: flex; flex-wrap: wrap; gap: 2px; }
 nav button {
   border: 0;

@@ -2,8 +2,24 @@
 -- Run automatically on server start (server.js), or manually:
 --   psql "$DATABASE_URL" -f db/schema.sql
 
+CREATE TABLE IF NOT EXISTS users (
+  id SERIAL PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  salt TEXT NOT NULL,
+  display_name TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS sessions (
+  token TEXT PRIMARY KEY,
+  user_id INT REFERENCES users(id) ON DELETE CASCADE,
+  expires_at TIMESTAMPTZ NOT NULL
+);
+ALTER TABLE authors ADD COLUMN IF NOT EXISTS user_id INT REFERENCES users(id);
+
 CREATE TABLE IF NOT EXISTS authors (
   id SERIAL PRIMARY KEY,
+  user_id INT REFERENCES users(id),
   name TEXT NOT NULL,
   bio TEXT DEFAULT '',
   skin TEXT DEFAULT 'classic-blue',

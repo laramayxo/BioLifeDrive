@@ -4,7 +4,69 @@
 let adult = false, me = null, skins = {};
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-async function api(path, opts) { const r = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts }); const t = await r.text(); let j; try { j = JSON.parse(t); } catch { j = { error: t }; } if (!r.ok) throw new Error(j.error || r.statusText); return j; }
+async function api(path, opts) { const token = (() => { try { return localStorage.getItem('authToken'); } catch { return null; } })(); const headers = { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) }; const r = await fetch(path, { headers, ...opts }); const t = await r.text(); let j; try { j = JSON.parse(t); } catch { j = { error: t }; } if (!r.ok) throw new Error(j.error || r.statusText); return j; }
+
+// ---------- Accounts: email + password, top-right sign in ----------
+// Clicking the BioLifeDrive logo goes home. The top-right "Create Profile"
+// button asks you to sign in (or create an account) with email + password.
+let currentUser = null, authMode = 'signup';
+function goHome() {
+  document.querySelectorAll('[data-nav]').forEach((x) => x.classList.remove('active'));
+  const home = document.querySelector('[data-nav=discover]'); if (home) home.classList.add('active');
+  document.querySelectorAll('.view').forEach((v) => v.classList.add('hidden'));
+  $('view-discover').classList.remove('hidden');
+  window.scrollTo(0, 0);
+}
+function refreshAuthArea() {
+  const el = $('authArea'); if (!el) return;
+  el.innerHTML = currentUser
+    ? `<span>${esc(currentUser.email)}</span><button onclick="topCreateProfile()">Create Profile</button><button onclick="signOut()">Sign out</button>`
+    : `<button onclick="showAuth('signup')">Create Profile</button><button onclick="showAuth('signin')">Sign in</button>`;
+}
+function topCreateProfile() {
+  if (!currentUser) { showAuth('signup'); return; }
+  document.querySelector('[data-nav=create-profile]').click();
+  refreshCreateProfile();
+}
+function showAuth(mode) {
+  authMode = mode || 'signup';
+  $('authTitle').textContent = authMode === 'signup' ? 'Create your account' : 'Sign in';
+  $('authSubmitBtn').textContent = authMode === 'signup' ? 'Create account' : 'Sign in';
+  $('authName').style.display = authMode === 'signup' ? '' : 'none';
+  $('authSwitchBtn').textContent = authMode === 'signup' ? 'Already have an account? Sign in' : 'No account yet? Create one';
+  $('authMsg').textContent = '';
+  $('authModal').classList.remove('hidden');
+}
+function closeAuth() { $('authModal').classList.add('hidden'); }
+async function submitAuth() {
+  const email = $('authEmail').value.trim(), password = $('authPassword').value, name = $('authName').value.trim();
+  $('authMsg').textContent = 'Please wait…';
+  try {
+    const d = await api(authMode === 'signup' ? '/api/auth/signup' : '/api/auth/signin', { method: 'POST', body: JSON.stringify({ email, password, name }) });
+    try { localStorage.setItem('authToken', d.token); } catch {}
+    currentUser = d.user;
+    closeAuth(); refreshAuthArea();
+    const me = await api('/api/auth/me');
+    if (me.profile) { try { localStorage.setItem('myProfileId', String(me.profile.id)); } catch {} }
+    if (authMode === 'signup') topCreateProfile();
+  } catch (e) { $('authMsg').textContent = e.message; }
+}
+async function signOut() {
+  try { await api('/api/auth/signout', { method: 'POST', body: JSON.stringify({}) }); } catch {}
+  try { localStorage.removeItem('authToken'); localStorage.removeItem('myProfileId'); } catch {}
+  currentUser = null; refreshAuthArea(); refreshCreateProfile();
+}
+$('authSubmitBtn').onclick = submitAuth;
+$('authSwitchBtn').onclick = () => showAuth(authMode === 'signup' ? 'signin' : 'signup');
+async function checkAuth() {
+  refreshAuthArea();
+  try {
+    const me = await api('/api/auth/me');
+    currentUser = me.user; refreshAuthArea();
+    if (me.profile) { try { localStorage.setItem('myProfileId', String(me.profile.id)); } catch {} }
+  } catch { currentUser = null; }
+}
+checkAuth();
 
 document.querySelectorAll('[data-nav]').forEach((b) => b.onclick = () => {
   document.querySelectorAll('[data-nav]').forEach((x) => x.classList.remove('active')); b.classList.add('active');
@@ -117,6 +179,7 @@ function refreshCreateProfile() {
     : '';
 }
 $('createProfileBtn').onclick = async () => {
+  if (!currentUser) { $('profileMsg').textContent = 'Sign in first — create an account with your email and password.'; showAuth('signup'); return; }
   if (myProfileId()) { refreshCreateProfile(); return; }
   try { const a = await api('/api/authors', { method: 'POST', body: JSON.stringify({ name: $('profileName').value, bio: $('profileBio').value }) }); me = a; try { localStorage.setItem('myProfileId', String(a.id)); } catch {} $('profileMsg').textContent = `Profile created — ID ${a.id}. Use this ID to publish stories.`; refreshCreateProfile(); loadAuthors(); }
   catch (e) { $('profileMsg').textContent = e.message; }
@@ -141,7 +204,7 @@ async function openProfile(id) {
   // Editing controls are private: only the profile owner sees them, on
   // their own profile. Everyone else sees the picture, friends, song and
   // AI companion — but no editing controls.
-  const isMine = String(a.id) === String(myProfileId());
+  const isMine = String(a.id) === String(myProfileId()) || (currentUser && a.user_id && String(a.user_id) === String(currentUser.id));
   const friendsById = Object.fromEntries((a.friends || []).map((f) => [String(f.id), f]));
   const topSlots = [1, 2, 3, 4, 5].map((rank) => {
     const t = (a.topFriends || []).find((x) => Number(x.rank) === rank);
