@@ -162,7 +162,24 @@ $('search').oninput = loadStories; $('category').onchange = loadStories;
 $('trendingBtn').onclick = async () => { const list = await api(`/api/stories?adult=${adult ? 1 : 0}&trending=1`); $('stories').innerHTML = list.map((s) => `<div class="card"><h3>${esc(s.title)}</h3><p>👁 ${s.reads} · ❤️ ${s.likes}</p></div>`).join(''); };
 
 $('publishBtn').onclick = async () => {
-  try { const s = await api('/api/stories', { method: 'POST', body: JSON.stringify({ author_id: Number($('newAuthor').value) || 1, title: $('newTitle').value, body: $('newBody').value, category: $('category').value || 'Life story' }) }); $('publishMsg').textContent = s.audience === 'adult' ? 'Published as 18+ adults-only.' : 'Published!'; loadStories(); }
+  // The old code asked for a profile name but secretly needed a numeric
+  // profile ID, defaulting to ID 1 — Lara's deleted profile — so publishing
+  // failed silently and went nowhere. Now: use her own profile if she has
+  // one, else match the name she typed, else send her to Create Profile.
+  // After publishing, open the story so she lands somewhere.
+  $('publishMsg').textContent = 'Publishing…';
+  try {
+    let authorId = Number(myProfileId()) || null;
+    if (!authorId) {
+      const name = $('newAuthor').value.trim();
+      if (name) { const list = await api('/api/authors'); const m = list.find((a) => a.name.toLowerCase() === name.toLowerCase()); if (m) authorId = m.id; }
+    }
+    if (!authorId) { $('publishMsg').textContent = 'Create a profile first — tap Create Profile at the top, then come back here to publish.'; document.querySelector('[data-nav=create-profile]').click(); refreshCreateProfile(); return; }
+    const s = await api('/api/stories', { method: 'POST', body: JSON.stringify({ author_id: authorId, title: $('newTitle').value, body: $('newBody').value, category: $('category').value || 'Life story' }) });
+    $('publishMsg').textContent = s.audience === 'adult' ? 'Published as 18+ adults-only.' : 'Published!';
+    $('newTitle').value = ''; $('newBody').value = '';
+    await loadStories(); openStory(s.id);
+  }
   catch (e) { $('publishMsg').textContent = e.message; }
 };
 // One profile per person: once a profile has been created in this browser,
