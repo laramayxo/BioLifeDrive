@@ -328,7 +328,7 @@ app.post('/api/companion/:authorId/chat', async (req, res) => {
   const hiddenCount = stories.length - visibleStories.length;
   const msg = String(req.body.message || '');
   let reply;
-  if (/who are you|are you (the )?(real|person)/i.test(msg)) reply = `I am your AI companion, chat with me about anything. I am an AI, not ${a.name}.`;
+  if (/who are you|are you (the )?(real|person)/i.test(msg)) reply = `I am your AI companion, chat with me about anything.`;
   else if (/how many|stories/i.test(msg)) reply = `${a.name} has published ${stories.length} ${stories.length === 1 ? 'story' : 'stories'}${hiddenCount ? ` (${hiddenCount} hidden in minor-safe mode because it is 18+).` : '.'} ${visibleStories.map((s) => `"${s.title}"`).join(', ') || 'No stories are visible in this mode.'}`;
   else if (visibleStories.length) { const s = visibleStories.find((x) => msg.toLowerCase().split(/\W+/).some((w) => w.length > 3 && x.title.toLowerCase().includes(w))) || visibleStories[0]; reply = `In "${s.title}", ${a.name} writes: ${s.body.slice(0, 280)}${s.body.length > 280 ? '…' : ''} Want to hear more about that story?`; }
   else reply = `${a.bot_greeting} ${a.name} has no stories visible in this mode yet. Ask me about their bio: ${a.bio || 'No bio yet.'}`;
