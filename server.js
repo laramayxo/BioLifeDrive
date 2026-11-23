@@ -255,6 +255,21 @@ app.post('/api/authors/:id/avatar-upload', express.raw({ type: 'image/*', limit:
   fs.writeFileSync(path.join(UPLOADS_DIR, name), req.body);
   res.json({ url: `/uploads/${name}` });
 });
+// Upload a picture for a story — shown above the story title. Stored under
+// /uploads/ like other uploads; Railway disk is ephemeral, so it can be
+// lost on redeploy until permanent storage is added.
+app.post('/api/stories/:id/image-upload', express.raw({ type: 'image/*', limit: '5mb' }), async (req, res) => {
+  const s = await getStory(req.params.id); if (!s) return res.status(404).json({ error: 'Story not found.' });
+  if (!req.body || !req.body.length) return res.status(400).json({ error: 'No image received.' });
+  const ct = String(req.headers['content-type'] || 'image/jpeg');
+  const ext = ct.includes('png') ? 'png' : ct.includes('gif') ? 'gif' : ct.includes('webp') ? 'webp' : 'jpg';
+  const name = `story-${req.params.id}-${Date.now()}.${ext}`;
+  fs.writeFileSync(path.join(UPLOADS_DIR, name), req.body);
+  const url = `/uploads/${name}`;
+  if (useDb) await q('UPDATE stories SET image_url=$1 WHERE id=$2', [url, s.id]);
+  else s.image_url = url;
+  res.json({ url });
+});
 // Upload a song file for a profile (owner only in the UI). Stored under
 // /uploads/ and served at /uploads/<file>. Railway disk is ephemeral, so
 // an uploaded song can be lost on redeploy — permanent storage is a later step.
@@ -294,7 +309,7 @@ app.post('/api/stories', async (req, res) => {
   if (status === 'blocked') return res.status(400).json({ error: 'This story was blocked by AI moderation and was not published.' });
   const audience = status === 'adult' ? 'adult' : 'all';
   if (useDb) { const r = await q('INSERT INTO stories(author_id,title,body,category,audience,status) VALUES($1,$2,$3,$4,$5,$6) RETURNING *', [author_id, title, body, category || 'Life story', audience, status]); return res.status(201).json(r.rows[0]); }
-  const s = { id: mem.seq.stories++, author_id, title, body, category: category || 'Life story', audience, status, reads: 0, likes: 0, created_at: new Date().toISOString() }; mem.stories.push(s); res.status(201).json(s);
+  const s = { id: mem.seq.stories++, author_id, title, body, category: category || 'Life story', audience, status, reads: 0, likes: 0, image_url: null, created_at: new Date().toISOString() }; mem.stories.push(s); res.status(201).json(s);
 });
 app.get('/api/stories/:id', async (req, res) => {
   const s = await getStory(req.params.id); if (!s) return res.status(404).json({ error: 'not found' });
@@ -328,11 +343,12 @@ app.patch('/api/stories/:id', async (req, res) => {
   const title = req.body.title !== undefined ? String(req.body.title) : s.title;
   const body = req.body.body !== undefined ? String(req.body.body) : s.body;
   const category = req.body.category || s.category;
+  const image_url = req.body.image_url !== undefined ? req.body.image_url : s.image_url;
   const status = moderate(`${title} ${body}`);
   if (status === 'blocked') return res.status(400).json({ error: 'This edit was blocked by AI moderation and was not saved.' });
   const audience = status === 'adult' ? 'adult' : 'all';
-  if (useDb) { const r = await q('UPDATE stories SET title=$1, body=$2, category=$3, audience=$4, status=$5 WHERE id=$6 RETURNING *', [title, body, category, audience, status, s.id]); return res.json(r.rows[0]); }
-  Object.assign(s, { title, body, category, audience, status }); res.json(s);
+  if (useDb) { const r = await q('UPDATE stories SET title=$1, body=$2, category=$3, audience=$4, status=$5, image_url=$6 WHERE id=$7 RETURNING *', [title, body, category, audience, status, image_url || null, s.id]); return res.json(r.rows[0]); }
+  Object.assign(s, { title, body, category, audience, status, image_url }); res.json(s);
 });
 app.delete('/api/stories/:id', async (req, res) => {
   const s = await getStory(req.params.id); if (!s) return res.status(404).json({ error: 'not found' });

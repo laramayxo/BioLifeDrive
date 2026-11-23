@@ -162,7 +162,7 @@ document.querySelectorAll('[data-legal]').forEach((b) => b.onclick = async () =>
 async function loadStories() {
   const q = $('search').value, cat = $('category').value;
   const list = await api(`/api/stories?adult=${adult ? 1 : 0}&q=${encodeURIComponent(q)}&category=${encodeURIComponent(cat)}`);
-  $('stories').innerHTML = list.map((s) => `<div class="card" onclick="openStory(${s.id})" style="cursor:pointer"><h3>${esc(s.title)}</h3><p>${esc(s.body.slice(0, 300))}</p><p>👁 ${s.reads} · ❤️ ${s.likes} · ${esc(s.category)} ${s.audience === 'adult' ? '· 18+' : ''}</p><button onclick="event.stopPropagation();openStory(${s.id})">Read</button> <button onclick="event.stopPropagation();likeStory(${s.id})">Like</button> <button onclick="event.stopPropagation();shareStory(${s.id},'${esc(s.title).replace(/'/g, '')}')">Share</button> <button onclick="event.stopPropagation();report('story',${s.id})">🚩 Report</button></div>`).join('') || '<p>No stories yet — publish the first one.</p>';
+  $('stories').innerHTML = list.map((s) => `<div class="card" onclick="openStory(${s.id})" style="cursor:pointer">${s.image_url ? `<img src="${esc(s.image_url)}" alt="" style="width:100%;border-radius:8px">` : ''}<h3>${esc(s.title)}</h3><p>${esc(s.body.slice(0, 300))}</p><p>👁 ${s.reads} · ❤️ ${s.likes} · ${esc(s.category)} ${s.audience === 'adult' ? '· 18+' : ''}</p><button onclick="event.stopPropagation();openStory(${s.id})">Read</button> <button onclick="event.stopPropagation();likeStory(${s.id})">Like</button> <button onclick="event.stopPropagation();shareStory(${s.id},'${esc(s.title).replace(/'/g, '')}')">Share</button> <button onclick="event.stopPropagation();report('story',${s.id})">🚩 Report</button></div>`).join('') || '<p>No stories yet — publish the first one.</p>';
 }
 async function shareStory(id, title) {
   const url = location.origin + '/#story-' + id;
@@ -180,6 +180,7 @@ async function openStory(id) {
   const s = await api(`/api/stories/${id}?adult=${adult ? 1 : 0}&viewer=${myProfileId() || ''}`);
   const isOwner = String(s.author_id) === String(myProfileId()) || (currentUser && s.author_user_id && String(s.author_user_id) === String(currentUser.id));
   $('storyDetail').innerHTML = `<div class="card"><button onclick="$('storyDetail').innerHTML='';loadStories()">← Back to all stories</button>
+    ${s.image_url ? `<img src="${esc(s.image_url)}" alt="" style="width:100%;border-radius:8px">` : ''}
     <h3>${esc(s.title)}</h3><p>${esc(s.body)}</p>
     <p>👁 ${s.reads} · ❤️ ${s.likes} · ${esc(s.category)} ${s.audience === 'adult' ? '· 18+' : ''}</p>
     <button onclick="likeStory(${s.id})">❤️ Like</button> <button onclick="shareStory(${s.id},'${esc(s.title).replace(/'/g, '')}')">Share</button> <button onclick="report('story',${s.id})">🚩 Report</button>
@@ -235,8 +236,16 @@ $('publishBtn').onclick = async () => {
     }
     if (!authorId) { $('publishMsg').textContent = 'Create a profile first — tap Create Profile at the top, then come back here to publish.'; document.querySelector('[data-nav=create-profile]').click(); refreshCreateProfile(); return; }
     const s = await api('/api/stories', { method: 'POST', body: JSON.stringify({ author_id: authorId, title: $('newTitle').value, body: $('newBody').value, category: $('category').value || 'Life story' }) });
+    const imgFile = $('newImage').files && $('newImage').files[0];
+    if (imgFile) {
+      if (imgFile.size > 5 * 1024 * 1024) throw new Error('That picture is over 5 MB. Pick a smaller one.');
+      $('publishMsg').textContent = 'Uploading your picture…';
+      const r = await fetch(`/api/stories/${s.id}/image-upload`, { method: 'POST', headers: { 'Content-Type': imgFile.type || 'image/jpeg' }, body: imgFile });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Picture upload failed.');
+    }
     $('publishMsg').textContent = s.audience === 'adult' ? 'Published as 18+ adults-only.' : 'Published!';
-    $('newTitle').value = ''; $('newBody').value = '';
+    $('newTitle').value = ''; $('newBody').value = ''; $('newImage').value = '';
     await loadStories(); openStory(s.id);
   }
   catch (e) { $('publishMsg').textContent = e.message; }
@@ -350,10 +359,10 @@ async function openProfile(id) {
       </div>
     </div>
     <div class="profile-below">
-      <h4>${esc(a.name)}'s stories</h4><div id="profileStories">${(a.stories || []).map((s) => `<div class="card"><b>${esc(s.title)}</b><p>${esc((s.body || '').slice(0, 200))}</p><button onclick="openStory(${s.id})">Read</button> <button onclick="event.stopPropagation();shareStory(${s.id},'${esc(s.title).replace(/'/g, '')}')">Share</button>${isMine ? ` <button onclick="openStory(${s.id}).then(()=>editStory(${s.id}))">✏️ Edit</button> <button onclick="deleteStory(${s.id})">🗑️ Delete</button>` : ''}</div>`).join('') || '<p>No stories yet.</p>'}</div>
+      <h4>${esc(a.name)}'s stories</h4><div id="profileStories">${(a.stories || []).map((s) => `<div class="card">${s.image_url ? `<img src="${esc(s.image_url)}" alt="" style="width:100%;border-radius:8px">` : ''}<b>${esc(s.title)}</b><p>${esc((s.body || '').slice(0, 200))}</p><button onclick="openStory(${s.id})">Read</button> <button onclick="event.stopPropagation();shareStory(${s.id},'${esc(s.title).replace(/'/g, '')}')">Share</button>${isMine ? ` <button onclick="openStory(${s.id}).then(()=>editStory(${s.id}))">✏️ Edit</button> <button onclick="deleteStory(${s.id})">🗑️ Delete</button>` : ''}</div>`).join('') || '<p>No stories yet.</p>'}</div>
       <h4>${esc(a.name)}'s videos</h4><div id="profileVideos"><p>Loading videos…</p></div>
       ${isMine ? `<h4>Publish on your page</h4>
-      <input id="pfTitle" placeholder="Story title"><textarea id="pfBody" placeholder="Write your story…"></textarea><button onclick="publishProfileStory(${a.id})">Publish story</button><p id="pfMsg"></p>
+      <input id="pfTitle" placeholder="Story title"><textarea id="pfBody" placeholder="Write your story…"></textarea><p>Add a picture (shown above the title): <input type="file" id="pfImage" accept="image/*"></p><button onclick="publishProfileStory(${a.id})">Publish story</button><p id="pfMsg"></p>
       <p><button onclick="document.querySelector('[data-nav=record-video]').click()">🎥 Record a video for your page</button></p>` : ''}
     </div></div>`;
   $('profileDetail').scrollIntoView();
@@ -379,7 +388,18 @@ async function setTopFive(id, rank, friendId) {
   openProfile(id);
 }
 async function publishProfileStory(id) {
-  try { const s = await api('/api/stories', { method: 'POST', body: JSON.stringify({ author_id: id, title: $('pfTitle').value, body: $('pfBody').value, category: 'Life story' }) }); $('pfMsg').textContent = s.audience === 'adult' ? 'Published as 18+ adults-only.' : 'Published on your page!'; openProfile(id); }
+  try {
+    const s = await api('/api/stories', { method: 'POST', body: JSON.stringify({ author_id: id, title: $('pfTitle').value, body: $('pfBody').value, category: 'Life story' }) });
+    const imgFile = $('pfImage').files && $('pfImage').files[0];
+    if (imgFile) {
+      if (imgFile.size > 5 * 1024 * 1024) throw new Error('That picture is over 5 MB. Pick a smaller one.');
+      $('pfMsg').textContent = 'Uploading your picture…';
+      const r = await fetch(`/api/stories/${s.id}/image-upload`, { method: 'POST', headers: { 'Content-Type': imgFile.type || 'image/jpeg' }, body: imgFile });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Picture upload failed.');
+    }
+    $('pfMsg').textContent = s.audience === 'adult' ? 'Published as 18+ adults-only.' : 'Published on your page!'; openProfile(id);
+  }
   catch (e) { $('pfMsg').textContent = e.message; }
 }
 async function setSkin(id, skin) { await api(`/api/authors/${id}/style`, { method: 'POST', body: JSON.stringify({ skin }) }); loadAuthors(); openProfile(id); }

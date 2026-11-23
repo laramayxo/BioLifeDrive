@@ -52,8 +52,10 @@ CREATE TABLE IF NOT EXISTS stories (
   status TEXT DEFAULT 'published', -- published | adult | blocked
   reads INT DEFAULT 0,
   likes INT DEFAULT 0,
+  image_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE stories ADD COLUMN IF NOT EXISTS image_url TEXT;
 
 CREATE TABLE IF NOT EXISTS comments (
   id SERIAL PRIMARY KEY,
