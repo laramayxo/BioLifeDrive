@@ -170,8 +170,17 @@ $('publishBtn').onclick = async () => {
 // (Without login yet, this is enforced per browser/device — someone using a
 // different device or clearing their browser data could still create one.
 // Real one-per-account enforcement needs login.)
-function refreshCreateProfile() {
-  const mine = myProfileId();
+async function refreshCreateProfile() {
+  // A profile saved in this browser may have been deleted on the server
+  // (for example Lara's two duplicate profiles, deleted 2026-11-23). If
+  // the saved profile no longer exists, clear it and unlock the form so a
+  // new profile can be created — otherwise the form stays locked forever
+  // and "Open my profile" tries to open a deleted profile.
+  let mine = myProfileId();
+  if (mine) {
+    try { await api('/api/authors/' + mine); }
+    catch { try { localStorage.removeItem('myProfileId'); } catch {} if (me && String(me.id) === String(mine)) me = null; mine = null; }
+  }
   const locked = !!mine;
   $('profileName').disabled = locked; $('profileBio').disabled = locked; $('createProfileBtn').disabled = locked;
   $('profileMsg').innerHTML = locked
@@ -199,7 +208,15 @@ async function addFriend(id) { await api(`/api/authors/${me ? me.id : 1}/friend`
 async function follow(id) { await api(`/api/authors/${id}/follow`, { method: 'POST', body: JSON.stringify({ followerId: me ? me.id : 1 }) }); alert('Following.'); }
 async function viewEp(id) { await api(`/api/episodes/${id}/view`, { method: 'POST' }); loadAuthors(); }
 async function openProfile(id) {
-  const a = await api('/api/authors/' + id);
+  let a;
+  try { a = await api('/api/authors/' + id); }
+  catch (e) {
+    // Deleted profile (or a stale saved ID): clear it so the Create Profile
+    // form unlocks, and say so instead of failing silently.
+    if (String(id) === String(myProfileId())) { try { localStorage.removeItem('myProfileId'); } catch {} if (me && String(me.id) === String(id)) me = null; refreshCreateProfile(); }
+    $('profileDetail').innerHTML = `<div class="card"><p>That profile couldn't be opened — it may have been deleted. You can create a new profile from the Create Profile tab.</p></div>`;
+    return;
+  }
   const skin = skins[a.skin] || {};
   // Editing controls are private: only the profile owner sees them, on
   // their own profile. Everyone else sees the picture, friends, song and
