@@ -177,15 +177,71 @@ async function addCustomSkin(id) {
   if (!imageUrl) { alert('Paste an image link or a profile layout code with an image in it.'); return; }
   try { const s = await api(`/api/authors/${id}/custom-skins`, { method: 'POST', body: JSON.stringify({ name: 'Custom skin', image_url: imageUrl }) }); await api(`/api/authors/${id}/style`, { method: 'POST', body: JSON.stringify({ custom_skin_url: s.image_url, custom_skin_name: s.name }) }); alert('Custom skin imported and applied.'); loadAuthors(); openProfile(id); } catch (e) { alert(e.message); } }
 async function chat(id) { const m = $('chatMsg').value; const d = await api(`/api/companion/${id}/chat`, { method: 'POST', body: JSON.stringify({ message: m, adult }) }); $('chatOut').innerHTML += `<p><b>You:</b> ${esc(m)}</p><p><b>AI:</b> ${esc(d.reply)}</p>`; }
-function voiceChat(id) {
-  // Voice call in the browser: speech recognition + speech synthesis.
-  // No phone number is dialled. Requires a browser with SpeechRecognition.
+let voiceState = null;
+function speakReply(text) {
+  try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = 'en-US'; speechSynthesis.speak(u); } catch {}
+}
+function stopVoice() {
+  if (!voiceState) return;
+  voiceState.active = false;
+  try { voiceState.rec && voiceState.rec.stop(); } catch {}
+  try { voiceState.mediaRecorder && voiceState.mediaRecorder.state !== 'inactive' && voiceState.mediaRecorder.stop(); } catch {}
+  try { voiceState.stream && voiceState.stream.getTracks().forEach((t) => t.stop()); } catch {}
+  speechSynthesis.cancel();
+  voiceState = null;
+  const s = $('voiceStatus'); if (s) s.textContent = 'Voice call ended.';
+}
+async function voiceChat(id) {
+  // Voice call in the browser — no phone number is dialled.
+  // iPhone Safari has no built-in speech recognition, so on iPhone we
+  // record your voice and send it to the site to transcribe (needs the
+  // AI key on the server). On browsers with speech recognition, we use
+  // that directly and keep listening until you tap Stop.
+  if (voiceState) { stopVoice(); return; }
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { alert('Voice call needs a browser with speech recognition. Use text chat instead.'); return; }
-  const rec = new SR(); rec.lang = 'en-US';
-  alert('Voice call started — speak now. The AI will speak its reply aloud.');
-  rec.onresult = async (e) => { const text = e.results[0][0].transcript; const d = await api(`/api/companion/${id}/chat`, { method: 'POST', body: JSON.stringify({ message: text, adult }) }); const u = new SpeechSynthesisUtterance(d.reply); speechSynthesis.speak(u); $('chatOut').innerHTML += `<p><b>You (voice):</b> ${esc(text)}</p><p><b>AI:</b> ${esc(d.reply)}</p>`; };
-  rec.start();
+  $('chatOut').innerHTML += `<p id="voiceStatus">Voice call started — speak now. <button onclick="stopVoice()">Stop voice call</button></p>`;
+  voiceState = { active: true, id };
+  if (SR) {
+    const rec = new SR(); rec.lang = 'en-US'; rec.continuous = true; rec.interimResults = false;
+    voiceState.rec = rec;
+    rec.onresult = async (e) => {
+      const text = e.results[e.results.length - 1][0].transcript;
+      try { const d = await api(`/api/companion/${id}/chat`, { method: 'POST', body: JSON.stringify({ message: text, adult }) }); speakReply(d.reply); $('chatOut').innerHTML += `<p><b>You (voice):</b> ${esc(text)}</p><p><b>AI:</b> ${esc(d.reply)}</p>`; }
+      catch (err) { $('chatOut').innerHTML += `<p>Voice reply failed: ${esc(err.message)}. Try text chat.</p>`; }
+    };
+    rec.onerror = (e) => { const s = $('voiceStatus'); if (!s) return; s.textContent = e.error === 'not-allowed' ? 'Microphone was blocked. Allow microphone access in your browser settings, then try again.' : e.error === 'no-speech' ? 'Listening… I did not hear anything. Speak again.' : 'Voice listening had a problem (' + e.error + '). Try text chat instead.'; };
+    rec.onend = () => { if (voiceState && voiceState.active) { try { rec.start(); } catch {} } };
+    try { rec.start(); } catch (e) { $('chatOut').innerHTML += `<p>Could not start listening. Try text chat instead.</p>`; voiceState = null; }
+    return;
+  }
+  // No built-in speech recognition (iPhone Safari): record and transcribe.
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    voiceState.stream = stream;
+    const mr = new MediaRecorder(stream); voiceState.mediaRecorder = mr;
+    const chunks = [];
+    mr.ondataavailable = (e) => chunks.push(e.data);
+    mr.onstop = async () => {
+      if (!voiceState || !voiceState.active) return;
+      const blob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' });
+      if (!blob.size) return;
+      try {
+        const r = await fetch(`/api/companion/${id}/voice?adult=${adult ? 1 : 0}`, { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Voice transcription failed.');
+        speakReply(d.reply);
+        $('chatOut').innerHTML += `<p><b>You (voice):</b> ${esc(d.transcript)}</p><p><b>AI:</b> ${esc(d.reply)}</p>`;
+      } catch (err) { $('chatOut').innerHTML += `<p>${esc(err.message)}</p>`; }
+      // Record the next turn, so the call keeps going until Stop.
+      if (voiceState && voiceState.active) { try { chunks.length = 0; mr.start(); setTimeout(() => { try { mr.state !== 'inactive' && mr.stop(); } catch {} }, 8000); } catch {} }
+    };
+    mr.start();
+    // One turn at a time: stop after 8 seconds of recording, transcribe, repeat.
+    setTimeout(() => { try { mr.state !== 'inactive' && mr.stop(); } catch {} }, 8000);
+  } catch (e) {
+    $('chatOut').innerHTML += `<p>Voice call could not start — microphone access was blocked or is not available on this device. Allow microphone access, or use text chat instead.</p>`;
+    voiceState = null;
+  }
 }
 $('earnBtn').onclick = async () => { const d = await api('/api/earnings/' + $('earnAuthor').value); $('earnOut').innerHTML = `<p>Total reads: ${d.totalReads} / 10,000 · Eligible: ${d.eligible ? 'Yes' : 'No'} · Creator share: $${d.creatorShare} of $${d.adRevenue} (50/50)</p>`; };
 $('memberBtn').onclick = async () => { await api('/api/memberships', { method: 'POST', body: JSON.stringify({ author_id: Number($('earnAuthor').value) || 1 }) }); alert('Creator Membership recorded (model only — no payment taken).'); };

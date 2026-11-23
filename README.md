@@ -49,8 +49,10 @@ standalone Node.js + Express + Postgres app, ready for Railway.
   No card is charged. Wire Stripe Checkout + webhooks after Stripe's
   live account is activated (address verification was pending).
 - **Real OpenAI replies.** Without `OPENAI_API_KEY` the companion uses
-  a grounded fallback that quotes the creator's own stories. With a key
-  set, wire the OpenAI call in `server.js` (`/api/companion/:id/chat`).
+  a smarter built-in fallback that remembers the conversation and talks
+  about the creator's bio and stories. With a key set in Railway
+  Variables, `server.js` calls OpenAI (`gpt-4o-mini`) for real, intelligent
+  replies, and voice calls on iPhone are transcribed with Whisper.
 - **Real AdSense ads.** Ad slots are placeholders. Set
   `ADSENSE_CLIENT_ID` after AdSense approves `biolifedrive.com`.
 - **Accounts / passwords.** Profiles here have no login yet. Add auth

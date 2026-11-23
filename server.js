@@ -318,24 +318,97 @@ app.get('/api/tax/:authorId/:year', async (req, res) => {
   res.json(summary);
 });
 
+// ---------- AI companion ----------
+// Real AI when OPENAI_API_KEY is set on Railway (pay-as-you-go OpenAI key,
+// added in Railway > Variables — never in code). Without it, the companion
+// uses a smarter built-in fallback below: it remembers the conversation,
+// talks about the creator's bio and stories, and chats about anything —
+// it just cannot reason like a full AI model.
+async function getBotHistory(authorId) {
+  try {
+    if (useDb) { const r = await q('SELECT role, body FROM bot_messages WHERE author_id=$1 ORDER BY id DESC LIMIT 10', [authorId]); return r.rows.reverse(); }
+    return mem.botMessages.filter((m) => m.author_id === Number(authorId)).slice(-10);
+  } catch { return []; }
+}
+async function openaiChat(messages) {
+  const r = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+    body: JSON.stringify({ model: process.env.OPENAI_MODEL || 'gpt-4o-mini', temperature: 0.7, max_tokens: 350, messages }),
+  });
+  if (!r.ok) throw new Error(`OpenAI ${r.status}`);
+  const j = await r.json();
+  return (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content || '').trim();
+}
+function smartFallback(a, msg, stories, visibleStories, hiddenCount, adult) {
+  const m = msg.toLowerCase().trim();
+  const storyList = visibleStories.map((s) => `"${s.title}"`).join(', ');
+  if (!m) return a.bot_greeting || 'I am your AI companion, chat with me about anything.';
+  if (/who are you|are you (the )?(real|person)|your name/.test(m)) return 'I am your AI companion, chat with me about anything.';
+  if (/^(hi|hello|hey|hiya|good morning|good afternoon|good evening)\b/.test(m)) return `Hi, good to talk to you. ${visibleStories.length ? `${a.name} has ${visibleStories.length} ${visibleStories.length === 1 ? 'story' : 'stories'} here — ${storyList}.` : `${a.name} hasn't published a story yet.`} What would you like to talk about?`;
+  if (/how are you|how('s| is) it going|how do you feel/.test(m)) return `I'm doing well, thanks for asking. I'm here to chat about anything — ${a.name}'s life stories, or something on your mind. What's up?`;
+  if (/thank/.test(m)) return `You're welcome. Anything else you want to talk about?`;
+  if (/how many|stories|what (has|did).* (write|publish)|tell me about/.test(m)) {
+    if (!stories.length) return `${a.name} hasn't published any stories yet. Their bio says: ${a.bio || 'nothing yet.'} What would you like to talk about instead?`;
+    return `${a.name} has published ${stories.length} ${stories.length === 1 ? 'story' : 'stories'}${hiddenCount ? ` (${hiddenCount} hidden in minor-safe mode because it is 18+).` : '.'} ${storyList ? `They are: ${storyList}.` : ''} Want me to tell you about one of them?`;
+  }
+  const hit = visibleStories.find((x) => m.split(/\W+/).some((w) => w.length > 3 && x.title.toLowerCase().includes(w)));
+  if (hit) return `In "${hit.title}", ${a.name} writes: ${hit.body.slice(0, 280)}${hit.body.length > 280 ? '…' : ''} What part of that stood out to you?`;
+  if (visibleStories.length) {
+    const s = visibleStories[0];
+    return `That's a good thing to think about. It reminds me of "${s.title}", where ${a.name} writes about ${s.body.slice(0, 120)}… Tell me more about what you mean — I'm listening.`;
+  }
+  return `I hear you. ${a.bio ? `${a.name}'s bio says: ${a.bio} ` : ''}Tell me a bit more about that — what happened, or what are you thinking about? I'm here to chat about anything.`;
+}
+async function getCompanionReply(a, msg, adult) {
+  const stories = (await listStories(true)).filter((s) => s.author_id === a.id);
+  const visibleStories = adult ? stories : stories.filter((s) => s.audience !== 'adult');
+  const hiddenCount = stories.length - visibleStories.length;
+  if (moderate(msg) === 'blocked') return 'I cannot talk about that here. Is there something else you would like to chat about?';
+  if (!adult && moderate(msg) === 'adult') return 'That topic is for adults-only mode. Is there something else you would like to chat about?';
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      const history = await getBotHistory(a.id);
+      const storyContext = visibleStories.slice(0, 3).map((s) => `"${s.title}": ${s.body.slice(0, 300)}`).join('\n') || 'No published stories yet.';
+      const system = `You are the AI companion on ${a.name}'s BioLifeDrive profile. Greeting: ${a.bot_greeting}. Personality: ${a.bot_personality || 'Warm, curious, and encouraging'}. Tone: ${a.bot_tone || 'Friendly'}. Topics: ${a.bot_topics || 'anything'}. Bio: ${a.bio || ''}. Published stories:\n${storyContext}\nChat about anything, like a helpful personal assistant: clear, direct, warm, conversational. Keep replies short — a few sentences unless asked for more. You are an AI, not ${a.name}; never pretend to be the person. ${adult ? '' : 'Minor-safe mode is on: do not share or discuss adults-only content.'}`;
+      const messages = [{ role: 'system', content: system }, ...history.slice(-6).map((h) => ({ role: h.role === 'assistant' ? 'assistant' : 'user', content: h.body })), { role: 'user', content: msg }];
+      const reply = await openaiChat(messages);
+      if (reply) return reply;
+    } catch (e) { console.warn('OpenAI chat failed, using fallback:', e.message); }
+  }
+  return smartFallback(a, msg, stories, visibleStories, hiddenCount, adult);
+}
+async function saveBotMessage(authorId, userMsg, reply) {
+  if (useDb) await q('INSERT INTO bot_messages(author_id,role,body) VALUES($1,$2,$3),($1,$4,$5)', [authorId, 'user', userMsg, 'assistant', reply]);
+  else { mem.botMessages.push({ id: mem.seq.botMessages++, author_id: Number(authorId), role: 'user', body: userMsg }); mem.botMessages.push({ id: mem.seq.botMessages++, author_id: Number(authorId), role: 'assistant', body: reply }); }
+}
 app.post('/api/companion/:authorId/chat', async (req, res) => {
   const a = await getAuthor(req.params.authorId); if (!a) return res.status(404).json({ error: 'not found' });
   if (!a.bot_enabled) return res.status(400).json({ error: 'This companion is turned off.' });
-  const stories = (await listStories(true)).filter((s) => s.author_id === a.id);
-  const adult = req.body.adult === true;
-  const visibleStories = adult ? stories : stories.filter((s) => s.audience !== 'adult');
-  // Minor-safe: never share adults-only content, but do not lie about the count.
-  const hiddenCount = stories.length - visibleStories.length;
   const msg = String(req.body.message || '');
-  let reply;
-  if (/who are you|are you (the )?(real|person)/i.test(msg)) reply = `I am your AI companion, chat with me about anything.`;
-  else if (/how many|stories/i.test(msg)) reply = `${a.name} has published ${stories.length} ${stories.length === 1 ? 'story' : 'stories'}${hiddenCount ? ` (${hiddenCount} hidden in minor-safe mode because it is 18+).` : '.'} ${visibleStories.map((s) => `"${s.title}"`).join(', ') || 'No stories are visible in this mode.'}`;
-  else if (visibleStories.length) { const s = visibleStories.find((x) => msg.toLowerCase().split(/\W+/).some((w) => w.length > 3 && x.title.toLowerCase().includes(w))) || visibleStories[0]; reply = `In "${s.title}", ${a.name} writes: ${s.body.slice(0, 280)}${s.body.length > 280 ? '…' : ''} Want to hear more about that story?`; }
-  else reply = `${a.bot_greeting} ${a.name} has no stories visible in this mode yet. Ask me about their bio: ${a.bio || 'No bio yet.'}`;
-  if (process.env.OPENAI_API_KEY) reply += '\n\n[Note: OPENAI_API_KEY is set, but this copy uses the grounded fallback. Wire the OpenAI call in server.js to use live AI.]';
-  if (useDb) await q('INSERT INTO bot_messages(author_id,role,body) VALUES($1,$2,$3),($1,$4,$5)', [a.id, 'user', msg, 'assistant', reply]);
-  else { mem.botMessages.push({ id: mem.seq.botMessages++, author_id: a.id, role: 'user', body: msg }); mem.botMessages.push({ id: mem.seq.botMessages++, author_id: a.id, role: 'assistant', body: reply }); }
-  res.json({ reply, ai: true, person: a.name, minorSafe: !adult });
+  const reply = await getCompanionReply(a, msg, req.body.adult === true);
+  await saveBotMessage(a.id, msg, reply);
+  res.json({ reply, ai: !!process.env.OPENAI_API_KEY, person: a.name, minorSafe: req.body.adult !== true });
+});
+// Voice: record in the browser, transcribe with OpenAI Whisper (needs
+// OPENAI_API_KEY), then answer with the same companion above. This is what
+// makes voice work on iPhone, where built-in speech recognition is missing.
+app.post('/api/companion/:authorId/voice', express.raw({ type: 'audio/*', limit: '10mb' }), async (req, res) => {
+  const a = await getAuthor(req.params.authorId); if (!a) return res.status(404).json({ error: 'not found' });
+  if (!a.bot_enabled) return res.status(400).json({ error: 'This companion is turned off.' });
+  if (!process.env.OPENAI_API_KEY) return res.status(400).json({ error: 'Voice transcription needs an AI key. Add OPENAI_API_KEY in Railway Variables, or use text chat for now.' });
+  try {
+    const form = new FormData();
+    form.append('file', new Blob([req.body], { type: req.headers['content-type'] || 'audio/webm' }), 'voice.webm');
+    form.append('model', 'whisper-1');
+    const r = await fetch('https://api.openai.com/v1/audio/transcriptions', { method: 'POST', headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` }, body: form });
+    if (!r.ok) throw new Error(`Whisper ${r.status}`);
+    const transcript = (await r.json()).text || '';
+    if (!transcript.trim()) return res.json({ transcript: '', reply: 'I did not catch that — could you say it again?' });
+    const reply = await getCompanionReply(a, transcript, req.query.adult === '1' || req.query.adult === 'true');
+    await saveBotMessage(a.id, transcript, reply);
+    res.json({ transcript, reply, ai: true, person: a.name, minorSafe: true });
+  } catch (e) { res.status(500).json({ error: 'Voice transcription failed. Please try again or use text chat.' }); }
 });
 
 const LEGAL = {
