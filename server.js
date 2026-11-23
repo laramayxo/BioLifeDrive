@@ -425,8 +425,13 @@ app.post('/api/videos', express.raw({ type: 'video/*', limit: '100mb' }), async 
     const description = String(req.query.description || '').slice(0, 2000);
     const duration_seconds = Number(req.query.duration_seconds) || 0;
     if (!author_id || !title) return res.status(400).json({ error: 'Create a profile first, then give your video a title.' });
-    if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: 'No video was recorded — record a video first.' });
-    if (req.body.length > 100 * 1024 * 1024) return res.status(413).json({ error: 'Video is too large (100 MB limit). Record a shorter video.' });
+    // Permanent storage: the browser may upload the video to Cloudinary
+    // first and pass its URL as file_url. Only accept Cloudinary URLs for
+    // this site's own cloud, so nobody can smuggle in an arbitrary link.
+    const fileUrl = String(req.query.file_url || '');
+    const hasBody = Buffer.isBuffer(req.body) && req.body.length;
+    if (!hasBody && !fileUrl) return res.status(400).json({ error: 'No video was recorded — record a video first.' });
+    if (hasBody && req.body.length > 100 * 1024 * 1024) return res.status(413).json({ error: 'Video is too large (100 MB limit). Record a shorter video.' });
     const status = moderate(`${title} ${description}`);
     if (status === 'blocked') return res.status(400).json({ error: 'This video was blocked by AI moderation and was not published.' });
     if (duration_seconds > 300) {
@@ -436,9 +441,16 @@ app.post('/api/videos', express.raw({ type: 'video/*', limit: '100mb' }), async 
       if (!hasMembership) return res.status(402).json({ error: 'Videos over 5 minutes need a $25/month Creator Membership. Free accounts can record videos up to 5 minutes.' });
     }
     const audience = status === 'adult' ? 'adult' : 'all';
-    const filename = `video-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.webm`;
-    fs.writeFileSync(path.join(UPLOADS_DIR, filename), req.body);
-    const file_path = `/uploads/${filename}`;
+    let file_path;
+    if (fileUrl) {
+      const cloud = process.env.CLOUDINARY_CLOUD_NAME || '';
+      if (!cloud || !fileUrl.startsWith(`https://res.cloudinary.com/${cloud}/video/upload/`)) return res.status(400).json({ error: 'That video link is not from this site’s permanent storage.' });
+      file_path = fileUrl;
+    } else {
+      const filename = `video-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.webm`;
+      fs.writeFileSync(path.join(UPLOADS_DIR, filename), req.body);
+      file_path = `/uploads/${filename}`;
+    }
     if (useDb) { const r = await q('INSERT INTO videos(author_id,title,description,file_path,duration_seconds,audience,status) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *', [author_id, title, description, file_path, duration_seconds, audience, status]); return res.status(201).json(r.rows[0]); }
     const v = { id: mem.seq.videos++, author_id, title, description, file_path, duration_seconds, audience, status, views: 0, created_at: new Date().toISOString() }; mem.videos.push(v); res.status(201).json(v);
   } catch (e) { res.status(500).json({ error: 'Video upload failed: ' + e.message }); }

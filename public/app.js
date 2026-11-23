@@ -142,8 +142,17 @@ $('publishVideoBtn').onclick = async () => {
   if (!authorId) { $('videoMsg').textContent = 'Enter your Profile ID first — create a profile on the Create Profile tab if you have not yet.'; return; }
   $('videoMsg').textContent = 'Publishing — AI is checking your title and description…';
   try {
-    const url = `/api/videos?author_id=${authorId}&title=${encodeURIComponent($('videoTitle').value)}&description=${encodeURIComponent($('videoDesc').value)}&duration_seconds=${recSeconds}`;
-    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'video/webm' }, body: recBlob });
+    // Save the video permanently first (Cloudinary). If Cloudinary is
+    // connected and that upload fails, stop instead of quietly saving the
+    // video to the site's temporary disk, where it would vanish on update.
+    const cfg = await getCloudConfig();
+    let fileUrl = '';
+    if (cfg.cloudinaryCloud && cfg.cloudinaryPreset) {
+      $('videoMsg').textContent = 'Saving your video permanently…';
+      fileUrl = await cloudinaryVideoUpload(recBlob);
+    }
+    const url = `/api/videos?author_id=${authorId}&title=${encodeURIComponent($('videoTitle').value)}&description=${encodeURIComponent($('videoDesc').value)}&duration_seconds=${recSeconds}${fileUrl ? `&file_url=${encodeURIComponent(fileUrl)}` : ''}`;
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'video/webm' }, body: fileUrl ? null : recBlob });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || r.statusText);
     $('videoMsg').textContent = j.audience === 'adult' ? 'Published as 18+ adults-only.' : 'Video published!';
@@ -392,6 +401,17 @@ async function cloudinaryUpload(file) {
   const r = await fetch(`https://api.cloudinary.com/v1_1/${cfg.cloudinaryCloud}/image/upload`, { method: 'POST', body: fd });
   const d = await r.json();
   if (!r.ok) throw new Error((d.error && d.error.message) || 'Picture upload failed.');
+  return d.secure_url;
+}
+// Videos go to the same permanent Cloudinary storage as pictures. Returns
+// the Cloudinary URL, or null when Cloudinary is not connected yet.
+async function cloudinaryVideoUpload(file) {
+  const cfg = await getCloudConfig();
+  if (!cfg.cloudinaryCloud || !cfg.cloudinaryPreset) return null;
+  const fd = new FormData(); fd.append('file', file); fd.append('upload_preset', cfg.cloudinaryPreset);
+  const r = await fetch(`https://api.cloudinary.com/v1_1/${cfg.cloudinaryCloud}/video/upload`, { method: 'POST', body: fd });
+  const d = await r.json();
+  if (!r.ok) throw new Error((d.error && d.error.message) || 'Video upload failed.');
   return d.secure_url;
 }
 async function uploadStoryPicture(storyId, file) {
