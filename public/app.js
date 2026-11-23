@@ -156,13 +156,17 @@ async function openProfile(id) {
   const picHtml = a.avatar_url
     ? `<img class="profile-pic" src="${esc(a.avatar_url)}" alt="${esc(a.name)}">`
     : `<div class="profile-pic profile-pic-empty">${esc((a.name || '?')[0])}</div>`;
+  const ytId = youtubeId(a.song_url || '');
+  const songPlayer = a.song_url ? (ytId ? `<iframe width="100%" height="160" src="https://www.youtube.com/embed/${ytId}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>` : `<audio controls preload="none" src="${esc(a.song_url)}" style="width:100%"></audio>`) : '';
   const musicHtml = `
     <div class="music-box"><h4>🎵 ${esc(a.song_title || 'No song yet')}</h4>
     <p>${esc(a.song_artist || '')}</p>
-    ${a.song_url ? `<audio controls preload="none" src="${esc(a.song_url)}" style="width:100%"></audio>` : ''}
+    ${songPlayer}
     ${isMine ? `
     <p>Search for a song: <input id="songSearch" placeholder="Song or artist…"> <button onclick="searchSongs(${a.id})">Search</button></p>
     <div id="songResults"></div>
+    <p>Add a free song from YouTube: <input id="songLink" placeholder="Paste a YouTube link…"> <button onclick="addSongFromLink(${a.id})">Add song</button></p>
+    <p id="songLinkMsg"></p>
     <p>Or upload your own song file (MP3/M4A/WAV, up to 15 MB — only upload a song you own or have permission to share): <input type="file" id="songFile" accept="audio/*"> <button onclick="uploadSong(${a.id})">Upload song</button></p>
     <p id="songMsg"></p>` : ''}
     </div>`;
@@ -233,6 +237,19 @@ async function addCustomSkin(id) {
   if (!imageUrl) { alert('Paste an image link or a profile layout code with an image in it.'); return; }
   try { const s = await api(`/api/authors/${id}/custom-skins`, { method: 'POST', body: JSON.stringify({ name: 'Custom skin', image_url: imageUrl }) }); await api(`/api/authors/${id}/style`, { method: 'POST', body: JSON.stringify({ custom_skin_url: s.image_url, custom_skin_name: s.name }) }); alert('Custom skin imported and applied.'); loadAuthors(); openProfile(id); } catch (e) { alert(e.message); } }
 let songResults = [];
+function youtubeId(url) { const m = String(url || '').match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/); return m ? m[1] : null; }
+async function addSongFromLink(id) {
+  const url = ($('songLink').value || '').trim();
+  const vid = youtubeId(url);
+  if (!vid) { $('songLinkMsg').textContent = 'That does not look like a YouTube link. Paste a youtube.com or youtu.be link.'; return; }
+  $('songLinkMsg').textContent = 'Adding song…';
+  try {
+    let title = 'YouTube song', artist = '';
+    try { const r = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent('https://www.youtube.com/watch?v=' + vid)}&format=json`); const j = await r.json(); title = j.title || title; artist = j.author_name || ''; } catch {}
+    await api(`/api/authors/${id}/style`, { method: 'POST', body: JSON.stringify({ song_title: title, song_artist: artist, song_url: 'https://www.youtube.com/watch?v=' + vid }) });
+    openProfile(id);
+  } catch (e) { $('songLinkMsg').textContent = e.message; }
+}
 async function searchSongs(id) {
   const q = ($('songSearch').value || '').trim();
   if (!q) { $('songResults').innerHTML = '<p>Type a song or artist to search.</p>'; return; }
