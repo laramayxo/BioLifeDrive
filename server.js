@@ -141,6 +141,11 @@ async function getStory(id) {
 
 // ---------- API ----------
 app.get('/api/health', (req, res) => res.json({ ok: true, db: useDb ? 'postgres' : 'memory', skins: Object.keys(SKINS) }));
+// Public upload config: Cloudinary cloud name + unsigned preset, set as
+// Railway Variables (CLOUDINARY_CLOUD_NAME, CLOUDINARY_UPLOAD_PRESET). These
+// are not secrets — the preset is unsigned on purpose — so they are safe to
+// expose to the browser. Empty until Lara connects her Cloudinary account.
+app.get('/api/config', (req, res) => res.json({ cloudinaryCloud: process.env.CLOUDINARY_CLOUD_NAME || '', cloudinaryPreset: process.env.CLOUDINARY_UPLOAD_PRESET || '' }));
 app.get('/api/skins', (req, res) => res.json(SKINS));
 
 // ---------- Accounts: email + password ----------

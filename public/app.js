@@ -247,9 +247,7 @@ $('publishBtn').onclick = async () => {
     if (imgFile) {
       if (imgFile.size > 5 * 1024 * 1024) throw new Error('That picture is over 5 MB. Pick a smaller one.');
       $('publishMsg').textContent = 'Uploading your picture…';
-      const r = await fetch(`/api/stories/${s.id}/image-upload`, { method: 'POST', headers: { 'Content-Type': imgFile.type || 'image/jpeg' }, body: imgFile });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Picture upload failed.');
+      await uploadStoryPicture(s.id, imgFile);
     }
     $('publishMsg').textContent = s.audience === 'adult' ? 'Published as 18+ adults-only.' : 'Published!';
     $('newTitle').value = ''; $('newBody').value = ''; $('newImage').value = '';
@@ -378,16 +376,45 @@ async function openProfile(id) {
   $('profileVideos').innerHTML = vids.filter((v) => v.author_id === a.id).map((v) => `<div class="card"><b>${esc(v.title)}</b> — ${fmtTime(v.duration_seconds || 0)} · 👁 ${v.views} ${v.audience === 'adult' ? '· 18+' : ''}<br><video controls preload="metadata" src="${esc(v.file_path)}" style="width:100%;max-width:560px"></video></div>`).join('') || '<p>No videos yet.</p>';
   if (ytId) initSongPlayer();
 }
+// Permanent picture storage (Cloudinary, free plan). The site reads the cloud
+// name + unsigned preset from /api/config (Railway Variables). Until those are
+// set, picture uploads fall back to the site's own temporary disk.
+let cloudCfg = null;
+async function getCloudConfig() {
+  if (cloudCfg) return cloudCfg;
+  try { cloudCfg = await (await fetch('/api/config')).json(); } catch (e) { cloudCfg = {}; }
+  return cloudCfg;
+}
+async function cloudinaryUpload(file) {
+  const cfg = await getCloudConfig();
+  if (!cfg.cloudinaryCloud || !cfg.cloudinaryPreset) return null;
+  const fd = new FormData(); fd.append('file', file); fd.append('upload_preset', cfg.cloudinaryPreset);
+  const r = await fetch(`https://api.cloudinary.com/v1_1/${cfg.cloudinaryCloud}/image/upload`, { method: 'POST', body: fd });
+  const d = await r.json();
+  if (!r.ok) throw new Error((d.error && d.error.message) || 'Picture upload failed.');
+  return d.secure_url;
+}
+async function uploadStoryPicture(storyId, file) {
+  const url = await cloudinaryUpload(file);
+  if (url) { await api(`/api/stories/${storyId}`, { method: 'PATCH', body: JSON.stringify({ image_url: url }) }); return; }
+  const r = await fetch(`/api/stories/${storyId}/image-upload`, { method: 'POST', headers: { 'Content-Type': file.type || 'image/jpeg' }, body: file });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || 'Picture upload failed.');
+}
 async function uploadAvatar(id) {
   const f = $('avatarFile').files && $('avatarFile').files[0];
   if (!f) { $('avatarMsg').textContent = 'Choose a picture first.'; return; }
   if (f.size > 5 * 1024 * 1024) { $('avatarMsg').textContent = 'That picture is over 5 MB. Pick a smaller one.'; return; }
   $('avatarMsg').textContent = 'Uploading…';
   try {
-    const r = await fetch(`/api/authors/${id}/avatar-upload`, { method: 'POST', headers: { 'Content-Type': f.type || 'image/jpeg' }, body: f });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.error || 'Upload failed.');
-    await api(`/api/authors/${id}/style`, { method: 'POST', body: JSON.stringify({ avatar_url: d.url }) });
+    let url = await cloudinaryUpload(f);
+    if (!url) {
+      const r = await fetch(`/api/authors/${id}/avatar-upload`, { method: 'POST', headers: { 'Content-Type': f.type || 'image/jpeg' }, body: f });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Upload failed.');
+      url = d.url;
+    }
+    await api(`/api/authors/${id}/style`, { method: 'POST', body: JSON.stringify({ avatar_url: url }) });
     openProfile(id);
   } catch (e) { $('avatarMsg').textContent = e.message; }
 }
@@ -403,9 +430,7 @@ async function publishProfileStory(id) {
     if (imgFile) {
       if (imgFile.size > 5 * 1024 * 1024) throw new Error('That picture is over 5 MB. Pick a smaller one.');
       $('pfMsg').textContent = 'Uploading your picture…';
-      const r = await fetch(`/api/stories/${s.id}/image-upload`, { method: 'POST', headers: { 'Content-Type': imgFile.type || 'image/jpeg' }, body: imgFile });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Picture upload failed.');
+      await uploadStoryPicture(s.id, imgFile);
     }
     $('pfMsg').textContent = s.audience === 'adult' ? 'Published as 18+ adults-only.' : 'Published on your page!'; openProfile(id);
   }
