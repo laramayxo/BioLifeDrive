@@ -291,8 +291,8 @@ async function openProfile(id) {
   }
   const skin = skins[a.skin] || {};
   // Editing controls are private: only the profile owner sees them, on
-  // their own profile. Everyone else sees the picture, friends, song and
-  // AI companion — but no editing controls.
+  // their own profile. Everyone else sees the picture, friends and song —
+  // but no editing controls.
   const isMine = String(a.id) === String(myProfileId()) || (currentUser && a.user_id && String(a.user_id) === String(currentUser.id));
   const friendsById = Object.fromEntries((a.friends || []).map((f) => [String(f.id), f]));
   const topSlots = [1, 2, 3, 4, 5].map((rank) => {
@@ -337,8 +337,6 @@ async function openProfile(id) {
         <div class="top5-grid">${top5Html}</div>
         <p>${(a.friends || []).map((f) => esc(f.name)).join(', ') || 'No friends yet — add friends from the Profiles tab.'}</p>
         ${editHtml}
-        <div class="chatbox"><b>🤖 ${esc(a.name)}'s AI Companion</b><p>${esc(a.bot_greeting || 'I am your AI companion, chat with me about anything')}</p>
-        <input id="chatMsg" placeholder="Ask about their life story…"><button onclick="chat(${a.id})">Send</button> <button onclick="voiceChat(${a.id})">🎤 Voice call</button><div id="chatOut"></div></div>
       </div>
     </div>
     <div class="profile-below">
