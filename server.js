@@ -126,7 +126,7 @@ async function createAuthor({ name, bio, userId }) {
     if (existing) throw new Error('You already have a profile.');
   }
   if (useDb) return (await q('INSERT INTO authors(user_id,name,bio) VALUES($1,$2,$3) RETURNING *', [userId || null, name, bio || ''])).rows[0];
-  const a = { id: mem.seq.authors++, user_id: userId || null, name, bio: bio || '', skin: 'classic-blue', avatar_url: null, custom_skin_url: null, custom_skin_name: null, song_title: '', song_artist: '', song_url: '', bot_enabled: true, bot_greeting: 'I am your AI companion, chat with me about anything', bot_personality: 'Warm, curious, and encouraging', bot_topics: '', bot_tone: 'Friendly', total_reads: 0, created_at: new Date().toISOString() };
+  const a = { id: mem.seq.authors++, user_id: userId || null, name, bio: bio || '', skin: 'classic-blue', avatar_url: null, custom_skin_url: null, custom_skin_name: null, song_title: '', song_artist: '', song_url: '', bot_enabled: true, bot_greeting: 'I am your AI companion, where you can have an intelligent conversation with me.', bot_personality: 'Warm, curious, and encouraging', bot_topics: '', bot_tone: 'Friendly', total_reads: 0, created_at: new Date().toISOString() };
   mem.authors.push(a); return a;
 }
 async function listStories(adultMode) {
@@ -469,7 +469,7 @@ async function openaiChat(messages) {
 function smartFallback(a, msg, stories, visibleStories, hiddenCount, adult) {
   const m = msg.toLowerCase().trim();
   const storyList = visibleStories.map((s) => `"${s.title}"`).join(', ');
-  if (!m) return a.bot_greeting || 'I am your AI companion, chat with me about anything.';
+  if (!m) return a.bot_greeting || 'I am your AI companion, where you can have an intelligent conversation with me.';
   if (/who are you|are you (the )?(real|person)|your name/.test(m)) return 'I am your AI companion, chat with me about anything.';
   if (/^(hi|hello|hey|hiya|good morning|good afternoon|good evening)\b/.test(m)) return `Hi, good to talk to you. ${visibleStories.length ? `${a.name} has ${visibleStories.length} ${visibleStories.length === 1 ? 'story' : 'stories'} here — ${storyList}.` : `${a.name} hasn't published a story yet.`} What would you like to talk about?`;
   if (/how are you|how('s| is) it going|how do you feel/.test(m)) return `I'm doing well, thanks for asking. I'm here to chat about anything — ${a.name}'s life stories, or something on your mind. What's up?`;

@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   expires_at TIMESTAMPTZ NOT NULL
 );
 ALTER TABLE authors ADD COLUMN IF NOT EXISTS user_id INT REFERENCES users(id);
+ALTER TABLE authors ALTER COLUMN bot_greeting SET DEFAULT 'I am your AI companion, where you can have an intelligent conversation with me.';
 
 CREATE TABLE IF NOT EXISTS authors (
   id SERIAL PRIMARY KEY,
@@ -30,7 +31,7 @@ CREATE TABLE IF NOT EXISTS authors (
   song_artist TEXT,
   song_url TEXT,
   bot_enabled BOOLEAN DEFAULT TRUE,
-  bot_greeting TEXT DEFAULT 'I am your AI companion, chat with me about anything',
+  bot_greeting TEXT DEFAULT 'I am your AI companion, where you can have an intelligent conversation with me.',
   bot_personality TEXT DEFAULT 'Warm, curious, and encouraging',
   bot_topics TEXT DEFAULT '',
   bot_tone TEXT DEFAULT 'Friendly',
