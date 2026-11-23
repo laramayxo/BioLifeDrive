@@ -171,7 +171,6 @@ async function openProfile(id) {
     <p id="songMsg"></p>` : ''}
     </div>`;
   const editHtml = isMine ? `
-    <p>Skins: ${Object.entries(skins).map(([k, v]) => `<span class="skin" onclick="setSkin(${a.id},'${k}')">${esc(v.name)}</span>`).join('')}</p>
     <p>Custom skin — paste a direct image link, or a whole profile layout code: <input id="csUrl" placeholder="Paste image link or layout code…"> <button onclick="addCustomSkin(${a.id})">Import skin</button></p>
     <h4>Pick your Top 5</h4>
     ${[1, 2, 3, 4, 5].map((rank) => `<p>#${rank} <select id="top5-${rank}" onchange="setTopFive(${a.id}, ${rank}, this.value)"><option value="">— none —</option>${(a.friends || []).map((f) => `<option value="${f.id}" ${(topSlots[rank - 1] && String(topSlots[rank - 1].id) === String(f.id)) ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select></p>`).join('')}`
