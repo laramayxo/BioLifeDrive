@@ -207,7 +207,7 @@ async function refreshCreateProfile() {
 $('createProfileBtn').onclick = async () => {
   if (!currentUser) { $('profileMsg').textContent = 'Sign in first — create an account with your email and password.'; showAuth('signup'); return; }
   if (myProfileId()) { refreshCreateProfile(); return; }
-  try { const a = await api('/api/authors', { method: 'POST', body: JSON.stringify({ name: $('profileName').value, bio: $('profileBio').value }) }); me = a; try { localStorage.setItem('myProfileId', String(a.id)); } catch {} $('profileMsg').textContent = `Profile created — ID ${a.id}. Use this ID to publish stories.`; refreshCreateProfile(); loadAuthors(); }
+  try { const a = await api('/api/authors', { method: 'POST', body: JSON.stringify({ name: $('profileName').value, bio: $('profileBio').value }) }); me = a; try { localStorage.setItem('myProfileId', String(a.id)); } catch {} $('profileMsg').textContent = `Profile created — taking you to your page…`; refreshCreateProfile(); await loadAuthors(); document.querySelector('[data-nav=profiles]').click(); openProfile(a.id); }
   catch (e) { $('profileMsg').textContent = e.message; }
 };
 refreshCreateProfile();
