@@ -142,15 +142,42 @@ async function shareStory(id, title) {
   } catch { prompt('Copy this link to share:', url); }
 }
 async function openStory(id) {
+  // Same hidden-view fix as profiles: the story detail lives in the
+  // Discover view, so switch to it first or nothing is visible.
+  const navBtn = document.querySelector('[data-nav=discover]'); if (navBtn) navBtn.click();
   const s = await api(`/api/stories/${id}?adult=${adult ? 1 : 0}&viewer=${myProfileId() || ''}`);
+  const isOwner = String(s.author_id) === String(myProfileId()) || (currentUser && s.author_user_id && String(s.author_user_id) === String(currentUser.id));
   $('storyDetail').innerHTML = `<div class="card"><button onclick="$('storyDetail').innerHTML='';loadStories()">← Back to all stories</button>
     <h3>${esc(s.title)}</h3><p>${esc(s.body)}</p>
     <p>👁 ${s.reads} · ❤️ ${s.likes} · ${esc(s.category)} ${s.audience === 'adult' ? '· 18+' : ''}</p>
     <button onclick="likeStory(${s.id})">❤️ Like</button> <button onclick="shareStory(${s.id},'${esc(s.title).replace(/'/g, '')}')">Share</button> <button onclick="report('story',${s.id})">🚩 Report</button>
+    ${isOwner ? `<button onclick="editStory(${s.id})">✏️ Edit</button> <button onclick="deleteStory(${s.id})">🗑️ Delete</button>` : ''}
+    <p id="storyMsg"></p>
+    <div id="editBox"></div>
     <h4>Comments</h4><div>${(s.comments || []).map((c) => `<p><b>${esc(c.author_name)}</b>: ${esc(c.body)}</p>`).join('') || '<p>No comments yet.</p>'}</div>
     <input id="commentName" placeholder="Your name"><input id="commentBody" placeholder="Write a comment…"><button onclick="addComment(${s.id})">Post comment</button><p id="commentMsg"></p></div>`;
   $('storyDetail').scrollIntoView();
   loadStories();
+}
+async function editStory(id) {
+  const s = await api(`/api/stories/${id}?adult=${adult ? 1 : 0}&viewer=${myProfileId() || ''}`);
+  $('editBox').innerHTML = `<h4>Edit story</h4>
+    <input id="editTitle" value="${esc(s.title)}">
+    <textarea id="editBody">${esc(s.body)}</textarea>
+    <button onclick="saveStory(${s.id})">Save changes</button> <button onclick="$('editBox').innerHTML=''">Cancel</button>
+    <p id="editMsg"></p>`;
+}
+async function saveStory(id) {
+  try {
+    const s = await api(`/api/stories/${id}`, { method: 'PATCH', body: JSON.stringify({ title: $('editTitle').value, body: $('editBody').value }) });
+    $('storyMsg').textContent = s.audience === 'adult' ? 'Saved as 18+ adults-only.' : 'Saved!';
+    openStory(id);
+  } catch (e) { $('editMsg').textContent = e.message; }
+}
+async function deleteStory(id) {
+  if (!confirm('Delete this story? This cannot be undone.')) return;
+  try { await api(`/api/stories/${id}`, { method: 'DELETE' }); $('storyDetail').innerHTML = ''; loadStories(); alert('Story deleted.'); if (myProfileId()) openProfile(Number(myProfileId())); }
+  catch (e) { alert(e.message); }
 }
 async function addComment(id) {
   try { await api(`/api/stories/${id}/comments`, { method: 'POST', body: JSON.stringify({ author_name: $('commentName').value || 'Guest', body: $('commentBody').value }) }); openStory(id); }
@@ -292,7 +319,7 @@ async function openProfile(id) {
       </div>
     </div>
     <div class="profile-below">
-      <h4>${esc(a.name)}'s stories</h4><div id="profileStories">${(a.stories || []).map((s) => `<div class="card"><b>${esc(s.title)}</b><p>${esc((s.body || '').slice(0, 200))}</p><button onclick="openStory(${s.id})">Read</button></div>`).join('') || '<p>No stories yet.</p>'}</div>
+      <h4>${esc(a.name)}'s stories</h4><div id="profileStories">${(a.stories || []).map((s) => `<div class="card"><b>${esc(s.title)}</b><p>${esc((s.body || '').slice(0, 200))}</p><button onclick="openStory(${s.id})">Read</button> <button onclick="event.stopPropagation();shareStory(${s.id},'${esc(s.title).replace(/'/g, '')}')">Share</button>${isMine ? ` <button onclick="openStory(${s.id}).then(()=>editStory(${s.id}))">✏️ Edit</button> <button onclick="deleteStory(${s.id})">🗑️ Delete</button>` : ''}</div>`).join('') || '<p>No stories yet.</p>'}</div>
       <h4>${esc(a.name)}'s videos</h4><div id="profileVideos"><p>Loading videos…</p></div>
       ${isMine ? `<h4>Publish on your page</h4>
       <input id="pfTitle" placeholder="Story title"><textarea id="pfBody" placeholder="Write your story…"></textarea><button onclick="publishProfileStory(${a.id})">Publish story</button><p id="pfMsg"></p>

@@ -304,7 +304,36 @@ app.get('/api/stories/:id', async (req, res) => {
   const counted = Number(req.query.viewer) !== s.author_id;
   if (counted) { if (useDb) await q('UPDATE stories SET reads=reads+1 WHERE id=$1', [s.id]); else s.reads++; }
   const comments = useDb ? (await q('SELECT * FROM comments WHERE story_id=$1 ORDER BY id', [s.id])).rows : mem.comments.filter((c) => c.story_id === s.id);
-  res.json({ ...s, reads: s.reads + (counted ? 1 : 0), comments });
+  const author = useDb ? (await q('SELECT user_id FROM authors WHERE id=$1', [s.author_id])).rows[0] : mem.authors.find((a) => a.id === s.author_id);
+  res.json({ ...s, reads: s.reads + (counted ? 1 : 0), comments, author_user_id: author ? author.user_id : null });
+});
+// Edit / delete a story — only the author (signed in, profile linked to
+// their account) can do it.
+async function storyOwnerCheck(req, s) {
+  const u = await authUser(req);
+  if (!u) return { ok: false, error: 'Sign in first.' };
+  const author = useDb ? (await q('SELECT user_id FROM authors WHERE id=$1', [s.author_id])).rows[0] : mem.authors.find((a) => a.id === s.author_id);
+  if (!author || !author.user_id || String(author.user_id) !== String(u.id)) return { ok: false, error: 'Only the author can do that.' };
+  return { ok: true };
+}
+app.patch('/api/stories/:id', async (req, res) => {
+  const s = await getStory(req.params.id); if (!s) return res.status(404).json({ error: 'not found' });
+  const check = await storyOwnerCheck(req, s); if (!check.ok) return res.status(403).json({ error: check.error });
+  const title = req.body.title !== undefined ? String(req.body.title) : s.title;
+  const body = req.body.body !== undefined ? String(req.body.body) : s.body;
+  const category = req.body.category || s.category;
+  const status = moderate(`${title} ${body}`);
+  if (status === 'blocked') return res.status(400).json({ error: 'This edit was blocked by AI moderation and was not saved.' });
+  const audience = status === 'adult' ? 'adult' : 'all';
+  if (useDb) { const r = await q('UPDATE stories SET title=$1, body=$2, category=$3, audience=$4, status=$5 WHERE id=$6 RETURNING *', [title, body, category, audience, status, s.id]); return res.json(r.rows[0]); }
+  Object.assign(s, { title, body, category, audience, status }); res.json(s);
+});
+app.delete('/api/stories/:id', async (req, res) => {
+  const s = await getStory(req.params.id); if (!s) return res.status(404).json({ error: 'not found' });
+  const check = await storyOwnerCheck(req, s); if (!check.ok) return res.status(403).json({ error: check.error });
+  if (useDb) await q('DELETE FROM stories WHERE id=$1', [s.id]);
+  else { mem.stories = mem.stories.filter((x) => x.id !== s.id); mem.comments = mem.comments.filter((c) => c.story_id !== s.id); }
+  res.json({ ok: true, deleted: s.id });
 });
 app.post('/api/stories/:id/like', async (req, res) => {
   if (useDb) await q('UPDATE stories SET likes=likes+1 WHERE id=$1', [req.params.id]); else { const s = await getStory(req.params.id); if (s) s.likes++; }
