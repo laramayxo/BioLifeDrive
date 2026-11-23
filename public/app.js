@@ -334,7 +334,7 @@ async function openProfile(id) {
     ? `<img class="profile-pic" src="${esc(a.avatar_url)}" alt="${esc(a.name)}">`
     : `<div class="profile-pic profile-pic-empty">${esc((a.name || '?')[0])}</div>`;
   const ytId = youtubeId(a.song_url || '');
-  const songPlayer = a.song_url ? (ytId ? `<iframe id="songPlayerFrame" width="100%" height="160" src="https://www.youtube.com/embed/${ytId}?autoplay=1&mute=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>` : `<audio id="songPlayerAudio" controls autoplay muted preload="none" src="${esc(a.song_url)}" style="width:100%"></audio>`) : '';
+  const songPlayer = a.song_url ? (ytId ? `<iframe id="songPlayerFrame" width="100%" height="160" src="https://www.youtube.com/embed/${ytId}?enablejsapi=1&rel=0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>` : `<audio id="songPlayerAudio" controls autoplay muted preload="none" src="${esc(a.song_url)}" style="width:100%"></audio>`) : '';
   const musicHtml = `
     <div class="music-box"><h4>🎵 ${esc(a.song_title || 'No song yet')}</h4>
     <p>${esc(a.song_artist || '')}</p>
@@ -376,6 +376,7 @@ async function openProfile(id) {
   $('profileDetail').scrollIntoView();
   const vids = await api(`/api/videos?adult=${adult ? 1 : 0}`);
   $('profileVideos').innerHTML = vids.filter((v) => v.author_id === a.id).map((v) => `<div class="card"><b>${esc(v.title)}</b> — ${fmtTime(v.duration_seconds || 0)} · 👁 ${v.views} ${v.audience === 'adult' ? '· 18+' : ''}<br><video controls preload="metadata" src="${esc(v.file_path)}" style="width:100%;max-width:560px"></video></div>`).join('') || '<p>No videos yet.</p>';
+  if (ytId) initSongPlayer();
 }
 async function uploadAvatar(id) {
   const f = $('avatarFile').files && $('avatarFile').files[0];
@@ -438,12 +439,32 @@ async function addCustomSkin(id) {
 let songResults = [];
 function youtubeId(url) { const m = String(url || '').match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/); return m ? m[1] : null; }
 // Browsers block autoplay WITH sound — a video may only start playing on
-// its own if it is muted. Tapping is a real user gesture, so the Sound on
-// button can restart the song with sound: for YouTube it reloads the player
-// without the mute flag, for an audio file it just unmutes it.
+// its own if it is muted. The first version just reloaded the video without
+// the mute flag, and YouTube still held it paused. Now the song is driven
+// through YouTube's player API: it starts muted on its own, and tapping
+// "Turn sound on" is a real user gesture, so unMute + playVideo actually
+// plays it with sound, from where it already is.
+let ytPlayer = null, ytApiLoading = false, ytApiQueue = [];
+function loadYtApi(cb) {
+  if (window.YT && YT.Player) { cb(); return; }
+  ytApiQueue.push(cb);
+  if (ytApiLoading) return;
+  ytApiLoading = true;
+  const s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(s);
+  window.onYouTubeIframeAPIReady = () => { const q = ytApiQueue; ytApiQueue = []; q.forEach((f) => f()); };
+}
+function initSongPlayer() {
+  ytPlayer = null;
+  loadYtApi(() => {
+    try {
+      ytPlayer = new YT.Player('songPlayerFrame', { events: { onReady: (e) => { e.target.mute(); e.target.playVideo(); } } });
+    } catch {}
+  });
+}
 function unmuteSong() {
+  if (ytPlayer && ytPlayer.unMute) { ytPlayer.unMute(); ytPlayer.setVolume(100); ytPlayer.playVideo(); return; }
   const frame = $('songPlayerFrame');
-  if (frame) { frame.src = frame.src.replace('autoplay=1&mute=1', 'autoplay=1').replace('mute=1&', ''); return; }
+  if (frame) { frame.src = frame.src.split('?')[0] + '?autoplay=1'; return; }
   const audio = $('songPlayerAudio');
   if (audio) { audio.muted = false; audio.volume = 1; audio.play(); }
 }
