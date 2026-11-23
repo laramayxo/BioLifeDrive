@@ -225,6 +225,11 @@ async function addFriend(id) { await api(`/api/authors/${me ? me.id : 1}/friend`
 async function follow(id) { await api(`/api/authors/${id}/follow`, { method: 'POST', body: JSON.stringify({ followerId: me ? me.id : 1 }) }); alert('Following.'); }
 async function viewEp(id) { await api(`/api/episodes/${id}/view`, { method: 'POST' }); loadAuthors(); }
 async function openProfile(id) {
+  // The profile is rendered inside the Profiles view. If we are on another
+  // tab (for example Create Profile, where "Open my profile" lives), the
+  // Profiles view is hidden — so the page loaded but nothing was visible.
+  // Switch to the Profiles tab first, then render.
+  const navBtn = document.querySelector('[data-nav=profiles]'); if (navBtn) navBtn.click();
   let a;
   try { a = await api('/api/authors/' + id); }
   catch (e) {
