@@ -309,7 +309,7 @@ async function openProfile(id) {
     ? `<img class="profile-pic" src="${esc(a.avatar_url)}" alt="${esc(a.name)}">`
     : `<div class="profile-pic profile-pic-empty">${esc((a.name || '?')[0])}</div>`;
   const ytId = youtubeId(a.song_url || '');
-  const songPlayer = a.song_url ? (ytId ? `<iframe width="100%" height="160" src="https://www.youtube.com/embed/${ytId}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>` : `<audio controls preload="none" src="${esc(a.song_url)}" style="width:100%"></audio>`) : '';
+  const songPlayer = a.song_url ? (ytId ? `<iframe width="100%" height="160" src="https://www.youtube.com/embed/${ytId}?autoplay=1&mute=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>` : `<audio controls autoplay muted preload="none" src="${esc(a.song_url)}" style="width:100%"></audio>`) : '';
   const musicHtml = `
     <div class="music-box"><h4>🎵 ${esc(a.song_title || 'No song yet')}</h4>
     <p>${esc(a.song_artist || '')}</p>
